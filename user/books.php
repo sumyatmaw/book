@@ -1,25 +1,32 @@
 <?php
 session_start();
-require_once 'config/db.php';
+require_once "../config/db.php";
 
-// customer role မဟုတ်ရင် login page ပြန်ပို့
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'customer') {
-    header("Location: auth/login.php");
+// Customer Login Check
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] != "customer") {
+    header("Location: ../auth/login.php");
     exit();
 }
 
-$userName = $_SESSION['user_name'] ?? 'Customer';
+// Search
+$search = "";
 
-// Books + Author + Category join query
-$sql = "SELECT books.id, books.title, books.price, books.stock, books.image,
-               authors.author_name,
-               categories.category_name
-        FROM books
-        LEFT JOIN authors ON books.author_id = authors.id
-        LEFT JOIN categories ON books.category_id = categories.id
-        ORDER BY books.id DESC";
+$sql = "SELECT Books.*, Categories.category_name
+        FROM Books
+        LEFT JOIN Categories
+        ON Books.category_id = Categories.id";
 
-$result = $conn->query($sql);
+if(isset($_GET['search']) && $_GET['search']!=""){
+    $search = trim($_GET['search']);
+
+    $sql .= " WHERE Books.title LIKE '%$search%'
+              OR Books.author LIKE '%$search%'
+              OR Categories.category_name LIKE '%$search%'";
+}
+
+$sql .= " ORDER BY Books.id DESC";
+
+$result = mysqli_query($conn,$sql);
 ?>
 
 <!DOCTYPE html>
@@ -27,109 +34,88 @@ $result = $conn->query($sql);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browse Books - Online Book Shop</title>
+    <title>Books - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 min-h-screen font-sans">
+<body class="bg-gray-100 min-h-screen flex flex-col font-sans text-slate-800">
 
-    <!-- Navbar -->
-    <nav class="bg-white shadow-md px-6 py-4 flex justify-between items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-blue-600">Online Book Shop</h1>
-            <p class="text-sm text-gray-500">Browse Books</p>
+    <?php include '../auth/headeru.php'; ?>
+
+<!-- Search -->
+<div class="max-w-7xl mx-auto mt-8 px-6 w-full">
+    <form method="GET">
+        <div class="flex shadow-sm rounded-lg overflow-hidden">
+            <input
+                type="text"
+                name="search"
+                value="<?php echo htmlspecialchars($search); ?>"
+                placeholder="Search Book..."
+                class="border w-full px-4 py-3 outline-none focus:border-blue-500">
+            <button class="bg-blue-600 text-white px-6 hover:bg-blue-700 transition">
+                Search
+            </button>
         </div>
+    </form>
+</div>
 
-        <div class="flex items-center gap-4">
-            <span class="font-semibold text-gray-700 hidden sm:block">
-                Hello, <?php echo htmlspecialchars($userName); ?>
-            </span>
-            <a href="user_dashboard.php" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg">
-                Dashboard
-            </a>
-            <a href="auth/logout.php" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
-                Logout
-            </a>
-        </div>
-    </nav>
+<!-- Books Content Area -->
+<div class="max-w-7xl mx-auto px-6 mt-10 flex-1 w-full">
+    <h2 class="text-3xl font-bold mb-8 text-gray-800">
+        Available Books
+    </h2>
 
-    <div class="max-w-7xl mx-auto p-6">
+    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <?php
+        if(mysqli_num_rows($result) > 0){
+            while($row = mysqli_fetch_assoc($result)){
+        ?>
+                <!-- flex flex-col h-full ထည့်သွင်း၍ Card အမြင့်များကို ညှိထားပါသည် -->
+                <div class="bg-white rounded-xl shadow hover:shadow-xl overflow-hidden flex flex-col h-full transition-all duration-300">
+                    
+                    <img src="../uploads/<?php echo $row['book_image'];?>" class="w-full h-72 object-cover" alt="Book Cover">
 
-        <!-- Page Title -->
-        <div class="mb-6">
-            <h2 class="text-3xl font-bold text-gray-800">Available Books</h2>
-            <p class="text-gray-500 mt-1">Browse and add your favorite books to cart.</p>
-        </div>
-
-        <?php if ($result && $result->num_rows > 0): ?>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-
-                <?php while ($row = $result->fetch_assoc()): ?>
-                    <div class="bg-white rounded-2xl shadow hover:shadow-lg transition overflow-hidden flex flex-col">
+                    <!-- flex-1 နှင့် flex flex-col ကြောင့် စာသားတိုသည်ဖြစ်စေ ရှည်သည်ဖြစ်စေ Content နေရာအပြည့် ယူထားမည်ဖြစ်သည် -->
+                    <div class="p-5 flex flex-col flex-1">
+                        <h3 class="text-lg font-bold text-gray-800 line-clamp-2 mb-1">
+                            <?php echo $row['title'];?>
+                        </h3>
                         
-                        <!-- Book Image -->
-                        <div class="h-64 bg-gray-100 overflow-hidden">
-                            <?php if (!empty($row['image'])): ?>
-                                <img src="uploads/<?php echo htmlspecialchars($row['image']); ?>" 
-                                     alt="<?php echo htmlspecialchars($row['title']); ?>" 
-                                     class="w-full h-full object-cover">
-                            <?php else: ?>
-                                <div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-                                    No Image
-                                </div>
-                            <?php endif; ?>
+                        <p class="text-sm text-gray-500">
+                            Author : <?php echo $row['author'];?>
+                        </p>
+                        
+                        <p class="text-sm text-gray-500">
+                            Category : <?php echo $row['category_name'];?>
+                        </p>
+                        
+                        <p class="text-blue-600 font-bold mt-3 text-lg">
+                            <?php echo number_format($row['price']);?> MMK
+                        </p>
+                        
+                        <p class="text-sm text-green-600 font-medium">
+                            Stock : <?php echo $row['stock'];?>
+                        </p>
+
+                        <!-- mt-auto ကြောင့် View button သည် အမြဲတမ်း Card ရဲ့ အောက်ခြေဆုံးတွင် တန်းစီပြီး ညီနေမည် ဖြစ်သည် -->
+                        <div class="flex gap-2 mt-auto pt-5">
+                            <a href="bookdetail.php?id=<?php echo $row['id'];?>" 
+                               class="flex-1 text-center bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition">
+                                View
+                            </a>
                         </div>
-
-                        <!-- Book Info -->
-                        <div class="p-5 flex flex-col flex-1">
-                            <h3 class="text-xl font-bold text-gray-800 mb-2 line-clamp-2">
-                                <?php echo htmlspecialchars($row['title']); ?>
-                            </h3>
-
-                            <p class="text-sm text-gray-600 mb-1">
-                                <span class="font-semibold">Author:</span>
-                                <?php echo htmlspecialchars($row['author_name'] ?? 'Unknown'); ?>
-                            </p>
-
-                            <p class="text-sm text-gray-600 mb-1">
-                                <span class="font-semibold">Category:</span>
-                                <?php echo htmlspecialchars($row['category_name'] ?? 'No Category'); ?>
-                            </p>
-
-                            <p class="text-sm text-gray-600 mb-3">
-                                <span class="font-semibold">Stock:</span>
-                                <?php echo (int)$row['stock']; ?>
-                            </p>
-
-                            <div class="mt-auto">
-                                <p class="text-2xl font-bold text-blue-600 mb-4">
-                                    <?php echo number_format($row['price'], 2); ?> MMK
-                                </p>
-
-                                <?php if ((int)$row['stock'] > 0): ?>
-                                    <a href="add_to_cart.php?book_id=<?php echo $row['id']; ?>"
-                                       class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition">
-                                        Add to Cart
-                                    </a>
-                                <?php else: ?>
-                                    <button class="w-full bg-gray-300 text-gray-600 py-3 rounded-xl font-semibold cursor-not-allowed" disabled>
-                                        Out of Stock
-                                    </button>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
                     </div>
-                <?php endwhile; ?>
-
+                </div>
+        <?php
+            }
+        } else {
+        ?>
+            <div class="col-span-full text-center text-red-500 text-xl py-12">
+                No Books Found.
             </div>
-        <?php else: ?>
-            <div class="bg-white rounded-2xl shadow p-10 text-center">
-                <h3 class="text-2xl font-bold text-gray-700 mb-2">No Books Found</h3>
-                <p class="text-gray-500">There are no books available right now.</p>
-            </div>
-        <?php endif; ?>
-
+        <?php
+        }
+        ?>
     </div>
-
-</body>
-</html>
+</div>
+    <?php include '../auth/footer.php'; ?>

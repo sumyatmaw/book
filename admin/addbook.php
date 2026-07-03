@@ -82,23 +82,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Book</title>
+    <title>Add Book - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
-    <!-- Header -->
-    <div class="bg-blue-600 text-white px-8 py-5 flex justify-between items-center shadow-md">
-        <h1 class="text-2xl font-bold">Add Book</h1>
-        <div class="flex gap-3">
-            <a href="dashboard.php" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100">
-                Dashboard
-            </a>
-            <a href="books.php" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100">
-                View Books
-            </a>
-        </div>
-    </div>
+    <?php include '../auth/header.php'; ?>
+
+    <div class="max-w-7xl mx-auto px-4 py-8 flex-1 w-full">
 
     <!-- Main Container -->
     <div class="max-w-3xl mx-auto mt-10 bg-white shadow-lg rounded-2xl p-8">
@@ -200,5 +192,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
     </div>
 
-</body>
-</html>
+    <?php include '../auth/footer.php'; ?>

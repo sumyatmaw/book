@@ -61,19 +61,15 @@ $items_result = $items_stmt->get_result();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Details - #<?= $order['id']; ?></title>
+    <title>Order Details - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
-    <div class="bg-blue-600 text-white px-8 py-5 flex justify-between items-center shadow-md">
-        <h1 class="text-2xl font-bold">Order Details</h1>
-        <a href="orders.php" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition">
-            &larr; Back to Orders
-        </a>
-    </div>
+    <?php include '../auth/header.php'; ?>
 
-    <div class="max-w-6xl mx-auto mt-10 p-4 md:p-8 space-y-8">
+    <div class="max-w-6xl mx-auto mt-6 px-4 md:px-8 space-y-8 flex-1 w-full">
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             
@@ -181,7 +177,4 @@ $items_result = $items_stmt->get_result();
             <?php endif; ?>
         </div>
 
-    </div>
-
-</body>
-</html>
+    <?php include '../auth/footer.php'; ?>

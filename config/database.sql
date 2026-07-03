@@ -5,7 +5,7 @@ CREATE TABLE `Users`(
     `password` VARCHAR(255) NOT NULL,
     `phone` VARCHAR(255) NOT NULL,
     `address` VARCHAR(255) NOT NULL,
-    `role` ENUM('admin','customer')  NULL DEFAULT 'customer',
+    `role` ENUM('admin','customer') NOT NULL DEFAULT 'customer',
     `created_at` TIMESTAMP NOT NULL
 );
 ALTER TABLE
@@ -46,7 +46,7 @@ CREATE TABLE `Payment`(
     `order_id` INT NOT NULL,
     `payment_method_id` INT NOT NULL,
     `amount` DECIMAL(8, 2) NOT NULL,
-    `status` ENUM('pending','paid','rejected') NOT NULL DEFAULT 'pending';
+    `status` ENUM('pending','paid','rejected') NOT NULL DEFAULT 'pending',
     `payment_date` TIMESTAMP NOT NULL,
     `transaction_ref` VARCHAR(255) NOT NULL,
     `payment_slip` VARCHAR(255) NOT NULL
@@ -58,7 +58,7 @@ CREATE TABLE `Delivery`(
     `receiver_phone` VARCHAR(255) NOT NULL,
     `address_details` TEXT NOT NULL,
     `city` VARCHAR(255) NOT NULL,
-    `delivery_status` ENUM('pending','shipping','delivered') NOT NULL DEFAULT 'pending';
+    `delivery_status` ENUM('pending','shipping','delivered') NOT NULL DEFAULT 'pending',
     `delivery_cost` DECIMAL(8, 2) NOT NULL,
     `shipped_at` TIMESTAMP NOT NULL
 );
@@ -76,6 +76,7 @@ CREATE TABLE `payment_method`(
     `account_number` VARCHAR(255) NOT NULL,
     `account_holder` VARCHAR(255) NOT NULL,
     `is_active` BOOLEAN NOT NULL,
+    
     `description` TEXT NOT NULL
 );
 CREATE TABLE `Order_item`(
