@@ -164,6 +164,9 @@ if (isset($_SESSION['success_msg'])) {
                     <a href="payments.php" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-800/60 hover:text-white transition-all duration-200">
                         <i class="fa-solid fa-credit-card text-sm w-5 text-center text-slate-500"></i> Payments
                     </a>
+                    <a href="delivery.php" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-800/60 hover:text-white transition-all duration-200">
+                        <i class="fa-solid fa-truck text-sm w-5 text-center text-slate-500"></i> Delivery
+                    </a>
                     <a href="customer.php" class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-800/60 hover:text-white transition-all duration-200">
                         <i class="fa-solid fa-users text-sm w-5 text-center text-slate-500"></i> Customers
                     </a>

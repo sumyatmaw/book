@@ -49,7 +49,7 @@ $currentPage = 'userdashboard';
 </head>
 <body class="bg-gray-100 min-h-screen font-sans text-slate-800 flex flex-col">
 
-    <?php include '../auth/headeru.php'; ?>
+    <?php include '../auth/header.php'; ?>
 
     <!-- 🔵 Welcome Hero-->
     <section class="bg-blue-600 text-white py-12 shadow-inner">
@@ -72,7 +72,7 @@ $currentPage = 'userdashboard';
                 <?php endif; ?>
                 <input type="text" name="search" value="<?= htmlspecialchars($search_query); ?>" placeholder="Search books or authors..." class="w-full border rounded-l-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm shadow-sm">
                 <button type="submit" class="bg-blue-600 text-white px-6 rounded-r-xl hover:bg-blue-700 font-bold transition">
-                    <i class="fa-solid fa-magnifying-glass mr-1"></i> ရှာဖွေမည်
+                    <i class="fa-solid fa-magnifying-glass mr-1"></i> Search
                 </button>
             </form>
         </div>
@@ -80,7 +80,7 @@ $currentPage = 'userdashboard';
         <!-- Category Dropdown Filter -->
         <div class="w-full">
             <select id="category_select" onchange="location = this.value;" class="w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm font-medium">
-                <option value="userdashboard.php?category_id=0&search=<?= urlencode($search_query); ?>">-- အမျိုးအစားအားလုံး --</option>
+                <option value="userdashboard.php?category_id=0&search=<?= urlencode($search_query); ?>">-- All Categories --</option>
                 <?php 
                 if ($dropdown_result && $dropdown_result->num_rows > 0): 
                     while ($cat = $dropdown_result->fetch_assoc()): 
@@ -116,7 +116,7 @@ $currentPage = 'userdashboard';
             <p class="text-gray-400 text-xs mt-1 hidden sm:block">Track your orders.</p>
         </a>
 
-        <a href="profile.php" class="bg-white shadow rounded-xl p-5 hover:shadow-xl hover:-translate-y-1 transition duration-200 group">
+        <a href="userprofile.php" class="bg-white shadow rounded-xl p-5 hover:shadow-xl hover:-translate-y-1 transition duration-200 group">
             <div class="text-4xl mb-2 group-hover:scale-110 transition duration-200">👤</div>
             <h3 class="font-bold text-base md:text-lg text-slate-800">Profile</h3>
             <p class="text-gray-400 text-xs mt-1 hidden sm:block">Manage your account.</p>
@@ -130,7 +130,7 @@ $currentPage = 'userdashboard';
                 <i class="fa-solid fa-layer-group text-blue-600"></i> Available Books
             </h2>
             <span class="text-xs bg-slate-200 text-slate-700 px-3 py-1 rounded-full font-bold">
-                တွေ့ရှိမှု - <?= $books_result ? $books_result->num_rows : 0; ?> အုပ်
+                <?= $books_result ? $books_result->num_rows : 0; ?> books found
             </span>
         </div>
 
@@ -185,9 +185,9 @@ $currentPage = 'userdashboard';
                 <div class="text-gray-300 text-5xl mb-4">
                     <i class="fa-solid fa-box-open"></i>
                 </div>
-                <h4 class="text-lg font-bold text-gray-700">ကိုက်ညီသော စာအုပ်မတွေ့ပါ</h4>
-                <p class="text-gray-400 text-xs mt-1">အခြား Keyword များ သို့မဟုတ် Category ပြောင်းလဲ၍ ရှာဖွေကြည့်ပါဗျာ။</p>
-                <a href="userdashboard.php" class="inline-block mt-4 text-xs font-bold text-blue-600 hover:underline">အစမှ ပြန်ရှာမည်</a>
+                <h4 class="text-lg font-bold text-gray-700">No matching books found</h4>
+                <p class="text-gray-400 text-xs mt-1">Try searching with different keywords or categories.</p>
+                <a href="userdashboard.php" class="inline-block mt-4 text-xs font-bold text-blue-600 hover:underline">Start Over</a>
             </div>
         <?php endif; ?>
     </div>

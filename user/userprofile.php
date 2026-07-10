@@ -9,7 +9,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// လက်ရှိ User Data ယူခြင်း
+
 $query = mysqli_query($conn, "SELECT * FROM Users WHERE id = '$user_id'");
 $user = mysqli_fetch_assoc($query);
 
@@ -20,7 +20,7 @@ if (isset($_POST['update_user'])) {
     $password = $_POST['password'];
     $profile_image = $user['profile_image']; 
 
-    // ပုံတင်ခြင်းအပိုင်း
+    
     if (isset($_FILES['profile_image']['name']) && $_FILES['profile_image']['name'] != "") {
         $target_dir = "../uploads/profile/";
         if (!file_exists($target_dir)) { mkdir($target_dir, 0777, true); }
@@ -40,7 +40,7 @@ if (isset($_POST['update_user'])) {
 
     if (mysqli_query($conn, $updateQuery)) {
         $_SESSION['success'] = "Profile updated successfully!";
-        header("Location: profile.php");
+        header("Location: userprofile.php");
         exit();
     }
 }
@@ -57,7 +57,7 @@ if (isset($_POST['update_user'])) {
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col font-sans text-slate-800">
 
-    <?php include '../auth/headeru.php'; ?>
+    <?php include '../auth/header.php'; ?>
 
     <main class="max-w-xl mx-auto px-4 py-10 flex-1 w-full">
         <h2 class="text-2xl font-bold mb-6">👤 My Account Profile</h2>
@@ -88,8 +88,8 @@ if (isset($_POST['update_user'])) {
                 <input type="text" name="phone" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" class="w-full px-4 py-2 border rounded-xl outline-none focus:border-green-500">
             </div>
             <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">New Password (Optional)</label>
-                <input type="password" name="password" placeholder="Leave blank to keep current" class="w-full px-4 py-2 border rounded-xl outline-none focus:border-green-500">
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Update Password</label>
+                <input type="password" name="password" placeholder="" class="w-full px-4 py-2 border rounded-xl outline-none focus:border-green-500">
             </div>
 
             <button type="submit" name="update_user" class="w-full bg-green-600 text-white py-2.5 rounded-xl font-semibold hover:bg-green-700 transition">Update Profile</button>

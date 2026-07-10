@@ -1,4 +1,12 @@
 <?php
+session_start();
+
+// Admin login check
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    header("Location: ../auth/login.php");
+    exit();
+}
+
 // Database connection configuration
 $host    = 'localhost';
 $db      = 'bookshop';

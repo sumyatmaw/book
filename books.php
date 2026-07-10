@@ -70,26 +70,16 @@ $currentPage = 'books';
                 while ($book = mysqli_fetch_assoc($books_result)) { 
             ?>
                     <!-- Book Card -->
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition duration-300">
+                    <a href="user/bookdetail.php?id=<?= $book['id']; ?>" class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition duration-300 group">
                         <div>
-                            <!-- စာအုပ်ပုံ (uploads/ Folder ထဲမှပုံကို ညွှန်းပါသည်) -->
-                            <img src="uploads/<?= htmlspecialchars($book['book_image'] ?? 'default.jpg'); ?>" class="w-full h-52 object-cover rounded-xl mb-4 bg-gray-50 shadow-sm">
+                            <img src="uploads/<?= htmlspecialchars($book['book_image'] ?? 'default.jpg'); ?>" class="w-full h-52 object-cover rounded-xl mb-4 bg-gray-50 shadow-sm group-hover:scale-105 transition duration-300">
                             <h3 class="font-bold text-sm text-slate-800 line-clamp-1 leading-tight"><?= htmlspecialchars($book['title']); ?></h3>
                             <p class="text-[11px] text-gray-400 mt-1 mb-2"><i class="fa-regular fa-user mr-1"></i> <?= htmlspecialchars($book['author']); ?></p>
                         </div>
                         <div>
                             <p class="text-red-600 font-black text-sm mb-3"><?= number_format($book['price']); ?> ကျပ်</p>
-                            
-                            <!-- ဝယ်ယူရန် Button Form (user/addtocart.php သို့ လှမ်းပို့မည်) -->
-                            <form action="user/addtocart.php" method="POST">
-                                <input type="hidden" name="book_id" value="<?= $book['id']; ?>">
-                                <input type="hidden" name="quantity" value="1">
-                                <!-- <button type="submit" class="w-full bg-slate-950 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-amber-500 hover:text-slate-900 shadow-sm transition duration-200">
-                                    🛒 ခြင်းတောင်းထဲထည့်မည်
-                                </button> -->
-                            </form>
                         </div>
-                    </div>
+                    </a>
             <?php 
                 } 
             } else { ?>

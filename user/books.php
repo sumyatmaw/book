@@ -40,7 +40,7 @@ $result = mysqli_query($conn,$sql);
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col font-sans text-slate-800">
 
-    <?php include '../auth/headeru.php'; ?>
+    <?php include '../auth/header.php'; ?>
 
 <!-- Search -->
 <div class="max-w-7xl mx-auto mt-8 px-6 w-full">

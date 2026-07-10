@@ -54,58 +54,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
 
             /* ---------------------------------------------------------- */
-            /* 1) Admin login (hardcoded credentials)                      */
-            /* ---------------------------------------------------------- */
-            if ($email === 'admin@gmail.com' && $password === '123123') {
-                session_regenerate_id(true);
-                $_SESSION['user_role']  = 'admin';
-                $_SESSION['user_email'] = $email;
-
-                if ($remember) {
-                    setcookie('remember_admin', bin2hex(random_bytes(16)), time() + 86400 * 30, '/');
-                }
-
-                header('Location: ../admin/dashboard.php');
-                exit();
-            }
-
-            /* ---------------------------------------------------------- */
-            /* 2) Customer login                                           */
+            /* Look up the email in the Users table                        */
             /* ---------------------------------------------------------- */
             $stmt = $conn->prepare(
-                'SELECT id, name, email, password FROM Users WHERE email = ? AND role = ? LIMIT 1'
+                'SELECT id, name, email, password, role FROM Users WHERE email = ? LIMIT 1'
             );
-            $role = 'customer';
-            $stmt->bind_param('ss', $email, $role);
+            $stmt->bind_param('s', $email);
             $stmt->execute();
             $result = $stmt->get_result();
 
-            if ($result->num_rows > 0) {
+            if ($result->num_rows === 0) {
+                /* Email does not exist in the database */
+                $error = 'No account was found with this email address. Please register before logging in.';
+            } else {
                 $row = $result->fetch_assoc();
 
-                if (password_verify($password, $row['password'])) {
-                    /* Regenerate session ID to prevent session fixation */
+                if (!password_verify($password, $row['password'])) {
+                    /* Email exists but password is wrong */
+                    $error = 'Incorrect password. Please try again.';
+                } else {
+                    /* -------------------------------------------------- */
+                    /* Credentials are correct — create session            */
+                    /* -------------------------------------------------- */
                     session_regenerate_id(true);
 
                     $_SESSION['user_id']    = $row['id'];
                     $_SESSION['user_name']  = $row['name'];
+                    $_SESSION['user_role']  = $row['role'];
                     $_SESSION['user_email'] = $row['email'];
-                    $_SESSION['user_role']  = 'customer';
 
                     /* Remember Me — 30-day cookie */
                     if ($remember) {
-                        setcookie('remember_user', bin2hex(random_bytes(16)), time() + 86400 * 30, '/');
+                        $cookie_name = $row['role'] === 'admin' ? 'remember_admin' : 'remember_user';
+                        setcookie($cookie_name, bin2hex(random_bytes(16)), time() + 86400 * 30, '/');
                     }
 
-                    header('Location: ../user/userdashboard.php');
-                    exit();
-                } else {
-                    /* Wrong password — generic message */
-                    $error = 'Invalid email or password.';
+                    /* -------------------------------------------------- */
+                    /* Redirect based on role                               */
+                    /* -------------------------------------------------- */
+                    if ($row['role'] === 'admin') {
+                        header('Location: ../admin/dashboard.php');
+                        exit();
+                    } else {
+                        header('Location: ../user/userdashboard.php');
+                        exit();
+                    }
                 }
-            } else {
-                /* Email not found — same generic message (no email enumeration) */
-                $error = 'Invalid email or password.';
             }
 
             $stmt->close();
@@ -243,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="checkbox" name="remember" value="1" class="remember-check w-4 h-4 rounded border-gray-300 cursor-pointer">
                     <span class="text-slate-600 font-semibold">Remember Me</span>
                 </label>
-                <a href="forgot_password.php" class="text-amber-700 font-bold hover:text-amber-800 hover:underline transition-colors duration-200">
+                <a href="#" class="text-amber-700 font-bold hover:text-amber-800 hover:underline transition-colors duration-200">
                     Forgot Password?
                 </a>
             </div>

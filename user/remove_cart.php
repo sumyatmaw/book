@@ -1,34 +1,39 @@
 <?php
-session_start();
-require_once "../config/db.php";
+/**
+ * Online Book Shop — Remove Cart Item
+ * Removes item from guest session cart or customer DB cart.
+ * Supports GET (index-based for guest, id-based for customer) and POST.
+ */
 
-// Customer Login Check
-if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] != "customer") {
-    header("Location: ../auth/login.php");
-    exit();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-$user_id = $_SESSION['user_id'];
+require_once __DIR__ . '/../config/db.php';
 
-// Cart ID စစ်
-if (!isset($_GET['id']) || empty($_GET['id'])) {
-    header("Location: cart.php");
-    exit();
+$is_logged_in = isset($_SESSION['user_id']);
+$guest_cart   = &$_SESSION['guest_cart'] ?? [];
+
+// Determine which item to remove
+// Guest: remove by array index (position in cart)
+// Customer: remove by cart_item.id
+$remove_index = isset($_GET['index']) ? intval($_GET['index']) : (isset($_POST['index']) ? intval($_POST['index']) : -1);
+$remove_id    = isset($_GET['id'])    ? intval($_GET['id'])    : (isset($_POST['id'])    ? intval($_POST['id'])    : -1);
+
+if ($is_logged_in && $remove_id > 0) {
+    // Customer: delete from DB
+    $uid = $_SESSION['user_id'];
+    $stmt = $conn->prepare("DELETE FROM Cart_item WHERE id = ? AND user_id = ?");
+    $stmt->bind_param("ii", $remove_id, $uid);
+    $stmt->execute();
+    $stmt->close();
+} elseif (!$is_logged_in && $remove_index >= 0) {
+    // Guest: remove from session array by index
+    if (isset($guest_cart[$remove_index])) {
+        array_splice($_SESSION['guest_cart'], $remove_index, 1);
+    }
 }
 
-$cart_id = intval($_GET['id']);
-
-// Customer ရဲ့ Cart Item ကိုသာ ဖျက်မယ်
-$stmt = $conn->prepare("DELETE FROM Cart_item WHERE id = ? AND user_id = ?");
-$stmt->bind_param("ii", $cart_id, $user_id);
-
-if ($stmt->execute()) {
-    header("Location: cart.php?msg=removed");
-    exit();
-} else {
-    echo "Failed to remove item.";
-}
-
-$stmt->close();
-$conn->close();
-?>
+// Redirect back to cart page
+header("Location: cart.php");
+exit;

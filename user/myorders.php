@@ -2,21 +2,41 @@
 session_start();
 require_once '../config/db.php';
 
-// Customer Login Check (မူရင်း Logic အတိုင်း စစ်ဆေးခြင်း)
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] != 'customer') {
+// Check if customer is properly logged in
+if (!isset($_SESSION['user_id']) || $_SESSION['user_role'] !== 'customer') {
     header("Location: ../auth/login.php");
     exit();
 }
 
-$user_id = $_SESSION['user_id'];
+// Strictly fetch only the current logged-in customer's ID
+$user_id = intval($_SESSION['user_id']);
 $base_url = '/onlinebookshop';
 
-// Orders ဒေတာ ဆွဲထုတ်ခြင်း (သင့် Database Structure အတိုင်း)
-$orders_query = "SELECT * FROM Orders WHERE user_id = ? ORDER BY created_at DESC";
+// Fetch orders with associated payment and delivery status specific to this user
+$orders_query = "SELECT Orders.*, 
+                        Payment.status AS payment_status, 
+                        Payment.transaction_ref,
+                        Delivery.delivery_status,
+                        Delivery.receiver_name
+                 FROM Orders 
+                 LEFT JOIN Payment ON Orders.id = Payment.order_id 
+                 LEFT JOIN Delivery ON Payment.id = Delivery.payment_id
+                 WHERE Orders.user_id = ? 
+                 ORDER BY Orders.created_at DESC";
+                 
 $stmt = $conn->prepare($orders_query);
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
+
+$currentPage = 'myorders';
+$categories = [];
+$cat_result = $conn->query("SELECT * FROM Categories ORDER BY category_name ASC");
+if ($cat_result) {
+    while ($row = $cat_result->fetch_assoc()) {
+        $categories[] = $row;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -32,123 +52,195 @@ $result = $stmt->get_result();
     <?php include '../auth/header.php'; ?>
 
     <div class="flex-1 container mx-auto px-4 sm:px-6 py-8">
-        
+
+        <!-- Header Section -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
-                <h1 class="text-2xl font-black text-slate-900 tracking-tight">My Orders</h1>
-                <p class="text-xs text-gray-500 mt-1">သင်မှာယူထားသော စာအုပ်အမှာစာရင်းများနှင့် အခြေအနေများ</p>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <i class="fa-solid fa-box text-amber-500"></i> My Orders
+                </h1>
+                <p class="text-xs text-gray-500 mt-1">Your order history and tracking</p>
             </div>
-            <a href="<?= $base_url; ?>/index.php" class="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition self-start sm:self-center">
-                <i class="fa-solid fa-arrow-left mr-1"></i> Back to Home
+            <a href="<?= $base_url; ?>/books.php" class="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition self-start sm:self-center">
+                <i class="fa-solid fa-shopping-bag mr-1"></i> Browse Books
             </a>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <?php if ($result && $result->num_rows > 0): ?>
-                
-                <div class="hidden md:block overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 border-b border-gray-100 text-xs font-bold uppercase tracking-wider text-slate-600">
-                                <th class="py-4 px-6">Order Number</th>
-                                <th class="py-4 px-6">Date</th>
-                                <th class="py-4 px-6">Total Amount</th>
-                                <th class="py-4 px-6">Status</th>
-                                <th class="py-4 px-6 text-center">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 text-sm font-medium text-slate-700">
-                            <?php while ($row = $result->fetch_assoc()): ?>
-                                <tr class="hover:bg-slate-50/50 transition">
-                                    <td class="py-4 px-6 font-bold text-slate-900">
-                                        #<?= htmlspecialchars($row['order_number'] ?? $row['id']); ?>
-                                    </td>
-                                    <td class="py-4 px-6 text-xs text-gray-500">
-                                        <?= date('d M Y, h:i A', strtotime($row['created_at'])); ?>
-                                    </td>
-                                    <td class="py-4 px-6 font-bold text-blue-600">
-                                        <?= number_format($row['total_amount']); ?> MMK
-                                    </td>
-                                    <td class="py-4 px-6">
-                                        <?php if ($row['status'] === 'pending'): ?>
-                                            <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Pending
-                                            </span>
-                                        <?php elseif ($row['status'] === 'completed'): ?>
-                                            <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Completed
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-bold bg-gray-50 text-gray-600 border border-gray-200">
-                                                <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Cancelled
-                                            </span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="py-4 px-6 text-center">
-                                        <?php if ($row['status'] === 'pending'): ?>
-                                            <a href="payment.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1 bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-blue-700 transition shadow-sm">
-                                                <i class="fa-solid fa-credit-card text-[10px]"></i> Pay Now
-                                            </a>
-                                        <?php else: ?>
-                                            <span class="text-xs text-gray-400 font-normal">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
+        <?php if ($result && $result->num_rows > 0): ?>
+            <div class="space-y-6">
+                <?php while ($row = $result->fetch_assoc()):
+                    $order_status = strtolower($row['status']);
+                    $payment_status = strtolower($row['payment_status'] ?? '');
+                    $delivery_status = strtolower($row['delivery_status'] ?? '');
+                    $has_transaction = !empty($row['transaction_ref']);
 
-                <div class="block md:hidden divide-y divide-gray-100">
-                    <?php 
-                    $result->data_seek(0); 
-                    while ($row = $result->fetch_assoc()): 
-                    ?>
-                        <div class="p-5 space-y-3.5">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm font-black text-slate-900">#<?= htmlspecialchars($row['order_number'] ?? $row['id']); ?></span>
-                                <span class="text-[11px] font-bold text-gray-400"><?= date('d M Y', strtotime($row['created_at'])); ?></span>
-                            </div>
+                    // Determine overall status for badge display
+                    if ($order_status === 'completed') {
+                        $display_status = 'Completed';
+                        $status_class = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                        $status_icon = 'fa-check-circle';
+                    } elseif ($order_status === 'cancelled') {
+                        $display_status = 'Cancelled';
+                        $status_class = 'bg-red-50 text-red-700 border-red-200';
+                        $status_icon = 'fa-times-circle';
+                    } elseif ($payment_status === 'rejected') {
+                        $display_status = 'Rejected';
+                        $status_class = 'bg-red-50 text-red-700 border-red-200';
+                        $status_icon = 'fa-times-circle';
+                    } elseif ($payment_status === 'paid') {
+                        $display_status = 'Paid';
+                        $status_class = 'bg-blue-50 text-blue-700 border-blue-200';
+                        $status_icon = 'fa-credit-card';
+                    } else {
+                        $display_status = 'Pending';
+                        $status_class = 'bg-amber-50 text-amber-700 border-amber-200';
+                        $status_icon = 'fa-clock';
+                    }
+
+                    // Define boolean timeline progression states
+                    $step_order = true; 
+                    $step_payment_submitted = $has_transaction || $payment_status === 'paid' || $payment_status === 'rejected';
+                    $step_payment_approved = $payment_status === 'paid';
+                    $step_packing = in_array($delivery_status, ['packing', 'shipping', 'delivered']);
+                    $step_shipping = in_array($delivery_status, ['shipping', 'delivered']);
+                    $step_delivered = $delivery_status === 'delivered';
+                ?>
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    
+                    <!-- Order Meta Card Header Details -->
+                    <div class="px-5 sm:px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <h3 class="font-black text-slate-900 text-sm sm:text-base">
+                                #<?= htmlspecialchars($row['order_number'] ?? $row['id']); ?>
+                            </h3>
+                            <p class="text-[11px] text-gray-400 mt-0.5">
+                                <?= date('d M Y, h:i A', strtotime($row['created_at'])); ?>
+                            </p>
+                        </div>
+                        <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                            <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-[11px] font-bold border <?= $status_class; ?>">
+                                <i class="fa-solid <?= $status_icon; ?> text-[10px]"></i> <?= $display_status; ?>
+                            </span>
+                            <span class="text-sm font-black text-blue-600">
+                                <?= number_format($row['total_amount']); ?> MMK
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Responsive Horizontal Tracking Timeline View Wrapper -->
+                    <div class="px-5 sm:px-6 py-5 overflow-x-auto">
+                        <div class="flex items-center justify-between min-w-[640px] pt-2 pb-4">
                             
-                            <div class="flex items-center justify-between">
-                                <div class="text-xs font-bold text-gray-500">Total Amount:</div>
-                                <div class="text-sm font-black text-blue-600"><?= number_format($row['total_amount']); ?> MMK</div>
+                            <!-- Step 1: Order Placed -->
+                            <div class="flex flex-col items-center flex-1 position-relative">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 z-10 <?= $step_order ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-gray-100 border-gray-300 text-gray-400' ?>">
+                                    <i class="fa-solid fa-check text-xs"></i>
+                                </div>
+                                <p class="text-[11px] font-bold text-center mt-2 <?= $step_order ? 'text-emerald-600' : 'text-gray-400' ?>">Order<br>Placed</p>
                             </div>
 
-                            <div class="flex items-center justify-between pt-1">
-                                <div>
-                                    <?php if ($row['status'] === 'pending'): ?>
-                                        <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Pending</span>
-                                    <?php elseif ($row['status'] === 'completed'): ?>
-                                        <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>
-                                    <?php else: ?>
-                                        <span class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-[11px] font-bold bg-gray-50 text-gray-600 border border-gray-200">Cancelled</span>
-                                    <?php endif; ?>
+                            <!-- Connector -->
+                            <div class="flex-1 h-0.5 -mt-6 <?= $step_payment_submitted ? 'bg-emerald-500' : 'bg-gray-200' ?>"></div>
+
+                            <!-- Step 2: Payment Submitted -->
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 z-10 <?= $step_payment_submitted ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-gray-100 border-gray-300 text-gray-400' ?>">
+                                    <i class="fa-solid fa-receipt text-xs"></i>
                                 </div>
-                                
-                                <?php if ($row['status'] === 'pending'): ?>
-                                    <a href="payment.php?order=<?= $row['id']; ?>" class="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-blue-700 transition shadow-sm">
-                                        Pay Now
-                                    </a>
-                                <?php endif; ?>
+                                <p class="text-[11px] font-bold text-center mt-2 <?= $step_payment_submitted ? 'text-emerald-600' : 'text-gray-400' ?>">Payment<br>Submitted</p>
+                            </div>
+
+                            <!-- Connector -->
+                            <div class="flex-1 h-0.5 -mt-6 <?= $step_payment_approved ? 'bg-emerald-500' : 'bg-gray-200' ?>"></div>
+
+                            <!-- Step 3: Payment Approved -->
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 z-10 <?= $step_payment_approved ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-gray-100 border-gray-300 text-gray-400' ?>">
+                                    <i class="fa-solid fa-credit-card text-xs"></i>
+                                </div>
+                                <p class="text-[11px] font-bold text-center mt-2 <?= $step_payment_approved ? 'text-emerald-600' : 'text-gray-400' ?>">Payment<br>Approved</p>
+                            </div>
+
+                            <!-- Connector -->
+                            <div class="flex-1 h-0.5 -mt-6 <?= $step_packing ? 'bg-emerald-500' : 'bg-gray-200' ?>"></div>
+
+                            <!-- Step 4: Packing -->
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 z-10 <?= $step_packing ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-gray-100 border-gray-300 text-gray-400' ?>">
+                                    <i class="fa-solid fa-box text-xs"></i>
+                                </div>
+                                <p class="text-[11px] font-bold text-center mt-2 <?= $step_packing ? 'text-emerald-600' : 'text-gray-400' ?>">Packing</p>
+                            </div>
+
+                            <!-- Connector -->
+                            <div class="flex-1 h-0.5 -mt-6 <?= $step_shipping ? 'bg-emerald-500' : 'bg-gray-200' ?>"></div>
+
+                            <!-- Step 5: Shipping -->
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 z-10 <?= $step_shipping ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-gray-100 border-gray-300 text-gray-400' ?>">
+                                    <i class="fa-solid fa-truck text-xs"></i>
+                                </div>
+                                <p class="text-[11px] font-bold text-center mt-2 <?= $step_shipping ? 'text-emerald-600' : 'text-gray-400' ?>">Shipping</p>
+                            </div>
+
+                            <!-- Connector -->
+                            <div class="flex-1 h-0.5 -mt-6 <?= $step_delivered ? 'bg-emerald-500' : 'bg-gray-200' ?>"></div>
+
+                            <!-- Step 6: Delivered -->
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm border-2 z-10 <?= $step_delivered ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-gray-100 border-gray-300 text-gray-400' ?>">
+                                    <i class="fa-solid fa-circle-check text-xs"></i>
+                                </div>
+                                <p class="text-[11px] font-bold text-center mt-2 <?= $step_delivered ? 'text-emerald-600' : 'text-gray-400' ?>">Delivered</p>
                             </div>
                         </div>
-                    <?php endwhile; ?>
-                </div>
+                    </div>
 
-            <?php else: ?>
+                    <!-- Contextual Footer Action Banner Trigger Button -->
+                    <div class="px-5 sm:px-6 py-4 border-t border-gray-100 bg-slate-50/50 flex items-center justify-between">
+                        <div>
+                            <?php if ($display_status === 'Pending' && $payment_status !== 'rejected'): ?>
+                                <a href="payment.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1.5 bg-blue-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-sm">
+                                    <i class="fa-solid fa-credit-card text-[10px]"></i> Pay Now
+                                </a>
+                            <?php elseif ($display_status === 'Rejected'): ?>
+                                <a href="payment.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1.5 bg-amber-500 text-slate-900 text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-amber-400 transition shadow-sm">
+                                    <i class="fa-solid fa-redo text-[10px]"></i> Retry Payment
+                                </a>
+                            <?php else: ?>
+                                <span class="text-xs text-gray-400 font-normal">
+                                    <?php if ($step_delivered): ?>
+                                        <i class="fa-solid fa-circle-check text-emerald-500 mr-1"></i> Order completed
+                                    <?php elseif ($step_shipping): ?>
+                                        <i class="fa-solid fa-truck text-blue-500 mr-1"></i> Your order is on the way
+                                    <?php elseif ($step_payment_approved): ?>
+                                        <i class="fa-solid fa-clock text-amber-500 mr-1"></i> Awaiting delivery
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endwhile; ?>
+            </div>
+
+        <?php else: ?>
+            <!-- Fallback Blank State View Container -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="p-12 text-center max-w-sm mx-auto">
                     <div class="w-16 h-16 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-400">
                         <i class="fa-solid fa-box-open text-xl"></i>
                     </div>
-                    <h3 class="text-base font-bold text-slate-900 mb-1">အမှာစာရင်း မရှိသေးပါ</h3>
-                    <p class="text-xs text-gray-400 leading-relaxed mb-5">လူကြီးမင်း ဝယ်ယူထားသည့် စာအုပ်အမှာစာရင်းများ မရှိသေးပါ။</p>
+                    <h3 class="text-base font-bold text-slate-900 mb-1">No Orders Yet</h3>
+                    <p class="text-xs text-gray-400 leading-relaxed mb-5">You haven't placed any orders yet.</p>
                     <a href="<?= $base_url; ?>/books.php" class="inline-flex bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm transition">
                         Browse Books
                     </a>
                 </div>
-            <?php endif; ?>
-        </div>
+            </div>
+        <?php endif; ?>
 
     </div>
 
@@ -156,7 +248,7 @@ $result = $stmt->get_result();
 
 </body>
 </html>
-<?php 
+<?php
 $stmt->close();
 $conn->close();
 ?>
