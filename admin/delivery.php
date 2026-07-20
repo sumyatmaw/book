@@ -9,8 +9,22 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] != "admin") {
 }
 
 $message = "";
+$admin_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 1;
 $admin_name = $_SESSION['user_name'] ?? 'Admin User';
 $admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
+
+// Fetch current admin profile image from session or database (Default: placeholder)
+$admin_image = $_SESSION['user_image'] ?? ''; 
+if (empty($admin_image)) {
+    // Optional fallback: Fetch from Users table if you store it there
+    $admin_query = mysqli_query($conn, "SELECT image FROM Users WHERE id = $admin_id");
+    if ($admin_query && mysqli_num_rows($admin_query) > 0) {
+        $admin_row = mysqli_fetch_assoc($admin_query);
+        $admin_image = $admin_row['image'] ?? '';
+    }
+}
+// Set standard folder path for profile images
+$profile_path = !empty($admin_image) ? "../uploads/profile/" . $admin_image : "";
 
 /* Update Delivery Status */
 if (isset($_POST['update'])) {
@@ -45,12 +59,12 @@ ORDER BY Delivery.id DESC";
 
 $result = $conn->query($sql);
 
-// System Counters for Badges & Notifications
-$pending_pay_query = $conn->query("SELECT COUNT(*) as t FROM Payment WHERE status='pending'");
-$pending_payments_count = $pending_pay_query ? $pending_pay_query->fetch_assoc()['t'] : 0;
+// Fetch Live Alert Badge & Dropdown Notifications (Synced with categories.php layout)
+$low_stock_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Books WHERE stock < 3");
+$low_stock_count = mysqli_fetch_assoc($low_stock_query)['total'] ?? 0;
 
-$low_stock_query = $conn->query("SELECT COUNT(*) as total FROM Books WHERE stock < 4");
-$low_stock_count = $low_stock_query ? $low_stock_query->fetch_assoc()['total'] : 0;
+$pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
+$pending_payments_count = mysqli_num_rows($pending_payments_query);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -141,19 +155,41 @@ $low_stock_count = $low_stock_query ? $low_stock_query->fetch_assoc()['total'] :
                         <?php endif; ?>
                     </button>
 
-                    <!-- Notifications Dropdown -->
+                    <!-- Notifications Dropdown (Populates live operational details upon clicking) -->
                     <div id="notiDropdown" class="hidden absolute right-0 top-12 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
-                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 font-bold text-xs text-slate-700">System Alerts</div>
-                        <div class="p-4 text-center text-xs text-slate-400 font-semibold">
-                            <?php echo ($low_stock_count + $pending_payments_count > 0) ? "You have system alerts pending." : "No new notifications."; ?>
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 font-bold text-xs text-slate-700">Notifications</div>
+                        <div class="divide-y divide-slate-100 max-h-64 overflow-y-auto no-scrollbar">
+                            <?php if ($pending_payments_count > 0): ?>
+                                <?php while($payment = mysqli_fetch_assoc($pending_payments_query)): ?>
+                                <a href="manage_payment.php" class="block p-3 hover:bg-slate-50 transition">
+                                    <p class="text-xs font-bold text-indigo-600 flex items-center"><i class="fa-solid fa-wallet mr-1.5"></i> New Bank Transfer Pending</p>
+                                    <p class="text-xxs text-slate-500 mt-0.5">Amount: <?php echo number_format($payment['amount']); ?> MMK awaiting approval.</p>
+                                </a>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+
+                            <?php if ($low_stock_count > 0): ?>
+                                <div class="block p-3 bg-amber-50/40">
+                                    <p class="text-xs font-bold text-amber-600 flex items-center"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Critical Stock Warning</p>
+                                    <p class="text-xxs text-slate-500 mt-0.5">You have <?php echo $low_stock_count; ?> books currently running low on stock.</p>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($low_stock_count == 0 && $pending_payments_count == 0): ?>
+                                <div class="p-4 text-center text-xs text-slate-400 font-medium">No new operational notifications.</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Admin Profile Menu -->
+                <!-- Admin Profile Menu Button (Updated with Profile Image View matching orders.php) -->
                 <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
-                        <i class="fa-solid fa-user text-sm"></i>
+                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer overflow-hidden">
+                        <?php if (!empty($profile_path) && file_exists($profile_path)): ?>
+                            <img src="<?= htmlspecialchars($profile_path); ?>" alt="Admin" class="w-full h-full object-cover">
+                        <?php else: ?>
+                            <i class="fa-solid fa-user text-sm"></i>
+                        <?php endif; ?>
                     </button>
 
                     <!-- Admin Profile Dropdown Menu -->

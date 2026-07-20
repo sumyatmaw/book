@@ -147,7 +147,7 @@ if ($cat_result) {
                 <i class="fa-solid fa-credit-card text-amber-500"></i> Payment
             </h1>
             <p class="text-sm font-bold text-gray-500 mb-6">
-                Total Amount: <span class="text-blue-600 text-lg"><?= number_format($total_amount); ?> MMK</span>
+                Total Amount: <span class="text-blue-600 text-lg"><?= number_format($total_amount); ?> ကျပ်</span>
             </p>
 
             <!-- Error & Success Messages -->

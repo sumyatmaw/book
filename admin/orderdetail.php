@@ -40,7 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
         }
         $u_stmt->close();
         
-       
         header("Location: orderdetail.php?id=" . $order_id);
         exit();
     }
@@ -85,6 +84,24 @@ $items_stmt = $conn->prepare($items_sql);
 $items_stmt->bind_param("i", $order_id);
 $items_stmt->execute();
 $items_result = $items_stmt->get_result();
+
+// 5. RESOLVE DYNAMIC SLIP IMAGE PATH AND EXTENSION CRASHES
+$actual_slip_path = 'https://placehold.co/150x200?text=No+Slip'; // Default fallback path
+if ($payment && !empty($payment['payment_slip'])) {
+    $slip_filename = $payment['payment_slip'];
+    $base_name = pathinfo($slip_filename, PATHINFO_FILENAME);
+    
+    // Check inside assets folder directly since files reside there
+    if (file_exists('../assets/' . $slip_filename)) {
+        $actual_slip_path = '../assets/' . $slip_filename;
+    } elseif (file_exists('../assets/' . $base_name . '.jpg')) {
+        $actual_slip_path = '../assets/' . $base_name . '.jpg';
+    } elseif (file_exists('../assets/' . $base_name . '.jpeg')) {
+        $actual_slip_path = '../assets/' . $base_name . '.jpeg';
+    } elseif (file_exists('../assets/' . $base_name . '.png')) {
+        $actual_slip_path = '../assets/' . $base_name . '.png';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -277,9 +294,9 @@ $items_result = $items_stmt->get_result();
                                             <?php endif; ?>
                                             <span class="font-medium text-gray-800"><?= htmlspecialchars($item['title']); ?></span>
                                         </td>
-                                        <td class="py-4 px-4 border-b text-gray-600"><?= number_format($item['price'], 2); ?> MMK</td>
+                                        <td class="py-4 px-4 border-b text-gray-600"><?= number_format($item['price'], 2); ?> ကျပ်</td>
                                         <td class="py-4 px-4 border-b font-medium text-gray-800"><?= $item['quantity']; ?></td>
-                                        <td class="py-4 px-4 border-b text-right font-semibold text-gray-800"><?= number_format($subtotal, 2); ?> MMK</td>
+                                        <td class="py-4 px-4 border-b text-right font-semibold text-gray-800"><?= number_format($subtotal, 2); ?> ကျပ်</td>
                                     </tr>
                                 <?php 
                                     endwhile; 
@@ -287,7 +304,7 @@ $items_result = $items_stmt->get_result();
                                 ?>
                                 <tr class="bg-gray-50">
                                     <td colspan="3" class="py-4 px-4 text-right font-bold text-gray-700">Total Amount:</td>
-                                    <td class="py-4 px-4 text-right font-bold text-xl text-blue-600"><?= number_format($order['total_amount'], 2); ?> MMK</td>
+                                    <td class="py-4 px-4 text-right font-bold text-xl text-blue-600"><?= number_format($order['total_amount'], 2); ?> ကျပ်</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -301,7 +318,7 @@ $items_result = $items_stmt->get_result();
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-600">
                             <div class="space-y-2">
                                 <p><strong class="text-gray-800">Payment Method:</strong> <?= htmlspecialchars($payment['method_name'] ?? 'N/A'); ?></p>
-                                <p><strong class="text-gray-800">Amount Paid:</strong> <?= number_format($payment['amount'], 2); ?> MMK</p>
+                                <p><strong class="text-gray-800">Amount Paid:</strong> <?= number_format($payment['amount'], 2); ?> ကျပ်</p>
                                 <p><strong class="text-gray-800">Transaction Ref:</strong> <?= htmlspecialchars($payment['transaction_ref'] ?? 'N/A'); ?></p>
                                 <p><strong class="text-gray-800">Payment Date:</strong> <?= !empty($payment['payment_date']) ? date('d M Y, h:i A', strtotime($payment['payment_date'])) : 'N/A'; ?></p>
                                 <p><strong class="text-gray-800">Payment Status:</strong> 
@@ -312,17 +329,12 @@ $items_result = $items_stmt->get_result();
                             <!-- Safe Slip Loader Utility -->
                             <div class="flex flex-col items-start md:items-center justify-center">
                                 <span class="block font-medium text-gray-800 mb-2">Payment Slip / Screenshot</span>
-                                <?php if (!empty($payment['payment_slip'])): 
-                                    $slip_file = htmlspecialchars($payment['payment_slip']);
-                                    
-                                    $primary_src = "../uploads/" . $slip_file; 
-                                ?>
-                                    <a href="<?= $primary_src; ?>" target="_blank" id="slipLink" class="block relative group">
-                                        <img src="<?= $primary_src; ?>" 
-                                             id="slipImg"
-                                             alt="Payment Slip" 
-                                             class="w-32 h-44 object-cover rounded-lg border shadow-sm group-hover:scale-105 transition duration-200"
-                                             onerror="handleSlipError(this, '<?= $slip_file; ?>')">
+                                <?php if (!empty($payment['payment_slip'])): ?>
+                                    <a href="<?= $actual_slip_path; ?>" target="_blank" id="slipLink" class="block relative group">
+                                       <img src="<?= $actual_slip_path; ?>" 
+                                            onerror="handleSlipError(this, '<?= htmlspecialchars($payment['payment_slip']); ?>')" 
+                                            class="w-48 h-auto object-cover rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:opacity-90 transition" 
+                                            alt="Payment Slip" />
                                     </a>
                                     <span class="text-xs text-gray-400 mt-1">(Click image to view large)</span>
                                 <?php else: ?>
@@ -348,16 +360,13 @@ $items_result = $items_stmt->get_result();
         overlay.classList.toggle('hidden');
     }
 
-    
     function handleSlipError(imgElement, filename) {
-       
         if (!imgElement.getAttribute('data-tried-admin')) {
             imgElement.setAttribute('data-tried-admin', 'true');
             const secondarySrc = "../admin/uploads/" + filename;
             imgElement.src = secondarySrc;
             document.getElementById('slipLink').href = secondarySrc;
         } else {
-            
             imgElement.onerror = null; 
             imgElement.src = "https://placehold.co/150x200/eaeaea/444444?text=Image+Not+Found";
             document.getElementById('slipLink').removeAttribute('href');

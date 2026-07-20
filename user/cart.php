@@ -2,7 +2,7 @@
 /**
  * Online Book Shop — Shopping Cart Page
  * Displays cart items for guests (session) and logged-in users (DB).
- * Supports quantity update (+/-) and item removal for both.
+ * Supports AJAX-based quantity update (+/-) and item removal for both with database stock sync.
  */
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -12,66 +12,145 @@ require_once __DIR__ . '/../config/db.php';
 
 $is_logged_in = isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'customer';
 
-// Handle quantity update and item removal actions via POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    $action = $_POST['action'];
+// Handle AJAX Request for live quantity updating
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'update_qty') {
+    header('Content-Type: application/json');
+    $idx = intval($_POST['index']);
+    $new_qty = max(1, intval($_POST['new_qty']));
+    $response = ['success' => false, 'message' => ''];
 
-    // 1. UPDATE QUANTITY LOGIC
-    if ($action === 'update_qty' && isset($_POST['index'], $_POST['new_qty'])) {
-        $idx = intval($_POST['index']);
-        $qty = max(1, intval($_POST['new_qty']));
+    if ($is_logged_in && isset($_POST['cart_item_id'])) {
+        $cid = intval($_POST['cart_item_id']);
+        $uid = $_SESSION['user_id'];
+        
+        $stock_stmt = $conn->prepare("SELECT Cart_item.book_id, Cart_item.quantity, Cart_item.unit_price, Books.stock FROM Cart_item INNER JOIN Books ON Cart_item.book_id = Books.id WHERE Cart_item.id = ? AND Cart_item.user_id = ?");
+        $stock_stmt->bind_param("ii", $cid, $uid);
+        $stock_stmt->execute();
+        $r = $stock_stmt->get_result()->fetch_assoc();
+        $stock_stmt->close();
 
-        if ($is_logged_in && isset($_POST['cart_item_id'])) {
-            // Update DB cart item for logged-in user
-            $cid = intval($_POST['cart_item_id']);
-            $uid = $_SESSION['user_id'];
-            
-            $stmt = $conn->prepare("SELECT unit_price FROM Cart_item WHERE id = ? AND user_id = ?");
-            $stmt->bind_param("ii", $cid, $uid);
-            $stmt->execute();
-            $r = $stmt->get_result()->fetch_assoc();
-            if ($r) {
-                $new_total = $r['unit_price'] * $qty;
+        if ($r) {
+            $book_id = intval($r['book_id']);
+            $old_qty = intval($r['quantity']);
+            $available_stock = max(0, intval($r['stock']));
+            $qty_diff = $new_qty - $old_qty;
+
+            if ($qty_diff <= $available_stock) {
+                $new_total = $r['unit_price'] * $new_qty;
+                
                 $upd = $conn->prepare("UPDATE Cart_item SET quantity = ?, totalprice = ? WHERE id = ? AND user_id = ?");
-                $upd->bind_param("idii", $qty, $new_total, $cid, $uid);
+                $upd->bind_param("idii", $new_qty, $new_total, $cid, $uid);
                 $upd->execute();
                 $upd->close();
+
+                $upd_stock = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
+                $upd_stock->bind_param("ii", $qty_diff, $book_id);
+                $upd_stock->execute();
+                $upd_stock->close();
+
+                $response = ['success' => true, 'new_item_total' => number_format($new_total) . ' ကျပ်'];
+            } else {
+                $response = ['success' => false, 'message' => 'Requested quantity exceeds available stock level. Only ' . ($available_stock + $old_qty) . ' items available.'];
             }
-            $stmt->close();
-        } elseif (!$is_logged_in && isset($_SESSION['guest_cart'][$idx])) {
-            // Update session cart item for guest user
-            $_SESSION['guest_cart'][$idx]['quantity'] = $qty;
-            $_SESSION['guest_cart'][$idx]['totalprice'] = $_SESSION['guest_cart'][$idx]['unit_price'] * $qty;
+        }
+    } elseif (!$is_logged_in && isset($_SESSION['guest_cart'][$idx])) {
+        $b_id = intval($_SESSION['guest_cart'][$idx]['book_id']);
+        $old_qty = intval($_SESSION['guest_cart'][$idx]['quantity']);
+        
+        $st_stmt = $conn->prepare("SELECT stock FROM Books WHERE id = ?");
+        $st_stmt->bind_param("i", $b_id);
+        $st_stmt->execute();
+        $st_res = $st_stmt->get_result()->fetch_assoc();
+        $available_stock = $st_res ? intval($st_res['stock']) : 0;
+        $st_stmt->close();
+
+        $qty_diff = $new_qty - $old_qty;
+
+        if ($qty_diff <= $available_stock) {
+            $_SESSION['guest_cart'][$idx]['quantity'] = $new_qty;
+            $new_total = $_SESSION['guest_cart'][$idx]['unit_price'] * $new_qty;
+            $_SESSION['guest_cart'][$idx]['totalprice'] = $new_total;
+
+            $upd_stock = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
+            $upd_stock->bind_param("ii", $qty_diff, $b_id);
+            $upd_stock->execute();
+            $upd_stock->close();
+
+            $response = ['success' => true, 'new_item_total' => number_format($new_total) . ' ကျပ်'];
+        } else {
+            $response = ['success' => false, 'message' => 'Requested quantity exceeds available stock level.'];
         }
     }
 
-    // 2. REMOVE ITEM LOGIC (integrated into self file)
+    // Recalculate Grand Total for Response JSON
+    $grand = 0;
+    if ($is_logged_in) {
+        $g_stmt = $conn->prepare("SELECT SUM(totalprice) as total FROM Cart_item WHERE user_id = ?");
+        $g_stmt->bind_param("i", $_SESSION['user_id']);
+        $g_stmt->execute();
+        $g_res = $g_stmt->get_result()->fetch_assoc();
+        $grand = $g_res['total'] ?? 0;
+        $g_stmt->close();
+    } else {
+        foreach (($_SESSION['guest_cart'] ?? []) as $item) {
+            $grand += $item['totalprice'];
+        }
+    }
+    $response['grand_total'] = number_format($grand) . ' ကျပ်';
+    echo json_encode($response);
+    exit;
+}
+
+// Handle traditional Post Back for items deletion
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    $action = $_POST['action'];
+
     if ($action === 'remove_item' && isset($_POST['index'])) {
         $idx = intval($_POST['index']);
 
         if ($is_logged_in && isset($_POST['cart_item_id'])) {
-            // Delete item from Database for logged-in user
             $cid = intval($_POST['cart_item_id']);
             $uid = $_SESSION['user_id'];
+            
+            $stmt = $conn->prepare("SELECT book_id, quantity FROM Cart_item WHERE id = ? AND user_id = ?");
+            $stmt->bind_param("ii", $cid, $uid);
+            $stmt->execute();
+            $res = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if ($res) {
+                $book_id = intval($res['book_id']);
+                $qty_to_restore = intval($res['quantity']);
+
+                $restore_stock = $conn->prepare("UPDATE Books SET stock = stock + ? WHERE id = ?");
+                $restore_stock->bind_param("ii", $qty_to_restore, $book_id);
+                $restore_stock->execute();
+                $restore_stock->close();
+            }
+
             $del = $conn->prepare("DELETE FROM Cart_item WHERE id = ? AND user_id = ?");
             $del->bind_param("ii", $cid, $uid);
             $del->execute();
             $del->close();
         } elseif (!$is_logged_in && isset($_SESSION['guest_cart'][$idx])) {
-            // Delete item from Session array for guest user and re-index array
+            $b_id = intval($_SESSION['guest_cart'][$idx]['book_id']);
+            $qty_to_restore = intval($_SESSION['guest_cart'][$idx]['quantity']);
+
+            $restore_stock = $conn->prepare("UPDATE Books SET stock = stock + ? WHERE id = ?");
+            $restore_stock->bind_param("ii", $qty_to_restore, $b_id);
+            $restore_stock->execute();
+            $restore_stock->close();
+
             unset($_SESSION['guest_cart'][$idx]);
             $_SESSION['guest_cart'] = array_values($_SESSION['guest_cart']);
         }
     }
-
-    // Refresh page to apply modifications safely
     header("Location: cart.php");
     exit;
 }
 
-// Load cart items along with real-time stock from Books table
+// Load cart data
 if ($is_logged_in) {
-    // Fetch from database for Logged-in Customer (JOIN Books to get stock)
     $user_id = $_SESSION['user_id'];
     $stmt = $conn->prepare("SELECT Cart_item.*, Books.title, Books.book_image, Books.stock FROM Cart_item INNER JOIN Books ON Cart_item.book_id = Books.id WHERE Cart_item.user_id = ?");
     $stmt->bind_param("i", $user_id);
@@ -79,11 +158,11 @@ if ($is_logged_in) {
     $result = $stmt->get_result();
     $cart_items = [];
     while ($row = $result->fetch_assoc()) {
+        $row['stock'] = max(0, intval($row['stock']));
         $cart_items[] = $row;
     }
     $stmt->close();
 } else {
-    // Fetch from session for Guest user (And dynamically check current stock)
     $cart_items = isset($_SESSION['guest_cart']) ? $_SESSION['guest_cart'] : [];
     foreach ($cart_items as $index => $item) {
         $b_id = intval($item['book_id']);
@@ -91,8 +170,9 @@ if ($is_logged_in) {
         $st_stmt->bind_param("i", $b_id);
         $st_stmt->execute();
         $st_res = $st_stmt->get_result()->fetch_assoc();
-        $cart_items[$index]['stock'] = $st_res ? intval($st_res['stock']) : 0;
+        $original_stock = $st_res ? intval($st_res['stock']) : 0;
         $st_stmt->close();
+        $cart_items[$index]['stock'] = max(0, $original_stock);
     }
 }
 
@@ -119,7 +199,6 @@ if ($cat_result) {
 
     <?php include __DIR__ . '/../auth/header.php'; ?>
 
-    <!-- Custom Responsive Stock Notification Alert Component Box -->
     <div id="cartStockToast" class="fixed top-5 right-5 z-50 transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none max-w-sm w-[90%] sm:w-full mx-auto sm:mx-0">
         <div class="bg-white border-l-4 border-rose-500 rounded-xl shadow-xl p-4 flex items-start gap-3 border border-slate-100">
             <div class="bg-rose-50 p-2 rounded-lg text-rose-600 flex-shrink-0">
@@ -136,16 +215,14 @@ if ($cat_result) {
     </div>
 
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex-1 w-full">
-
         <h1 class="text-2xl md:text-3xl font-black text-slate-900 mb-6 flex items-center gap-3">
             <i class="fa-solid fa-cart-shopping text-amber-500"></i> My Shopping Cart
         </h1>
 
         <?php if (!empty($cart_items)): ?>
-            <!-- Cart Table Container -->
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full text-sm min-w-[600px]">
                         <thead class="bg-slate-50 text-gray-500 uppercase text-[11px] tracking-wider">
                             <tr>
                                 <th class="p-4 text-left font-semibold">Image</th>
@@ -159,12 +236,13 @@ if ($cat_result) {
                         <tbody>
                             <?php foreach ($cart_items as $index => $item):
                                 $grandTotal += $item['totalprice'];
-                                $item_stock = isset($item['stock']) ? intval($item['stock']) : 999;
+                                $item_stock = isset($item['stock']) ? intval($item['stock']) : 0;
+                                $cart_item_id = $item['id'] ?? 0;
                             ?>
                                 <tr class="cart-item-row border-b border-gray-100 hover:bg-gray-50/50 transition-colors duration-150" 
+                                    id="row-<?= $index; ?>"
                                     data-title="<?= htmlspecialchars($item['title']); ?>" 
-                                    data-stock="<?= $item_stock; ?>" 
-                                    data-qty="<?= intval($item['quantity']); ?>">
+                                    data-stock="<?= $item_stock; ?>">
                                     
                                     <td class="p-4">
                                         <img src="../uploads/<?= htmlspecialchars($item['book_image'] ?? 'default.jpg'); ?>"
@@ -174,50 +252,40 @@ if ($cat_result) {
                                         <?= htmlspecialchars($item['title']); ?>
                                     </td>
                                     <td class="p-4 text-center text-gray-600 font-medium">
-                                        <?= number_format($item['unit_price']); ?> MMK
+                                        <?= number_format($item['unit_price']); ?> ကျပ်
                                     </td>
                                     <td class="p-4 text-center">
                                         <div class="inline-flex items-center gap-0 bg-slate-100 rounded-lg border border-gray-200">
-                                            <!-- minus button form -->
-                                            <form method="POST" class="inline">
-                                                <input type="hidden" name="action" value="update_qty">
-                                                <input type="hidden" name="index" value="<?= $index; ?>">
-                                                <?php if ($is_logged_in && isset($item['id'])): ?>
-                                                    <input type="hidden" name="cart_item_id" value="<?= $item['id']; ?>">
-                                                <?php endif; ?>
-                                                <input type="hidden" name="new_qty" value="<?= max(1, $item['quantity'] - 1); ?>">
-                                                <button type="submit" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-l-lg transition-colors duration-200 font-bold <?= $item['quantity'] <= 1 ? 'opacity-40 cursor-not-allowed' : '' ?>" <?= $item['quantity'] <= 1 ? 'disabled' : '' ?>>
-                                                    <i class="fa-solid fa-minus text-[10px]"></i>
-                                                </button>
-                                            </form>
+                                            <!-- Minus Button -->
+                                            <button type="button" 
+                                                    onclick="changeQuantity(<?= $index; ?>, <?= $cart_item_id; ?>, -1)"
+                                                    id="btn-minus-<?= $index; ?>"
+                                                    class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-l-lg transition-colors duration-200 font-bold <?= $item['quantity'] <= 1 ? 'opacity-40 cursor-not-allowed' : '' ?>" <?= $item['quantity'] <= 1 ? 'disabled' : '' ?>>
+                                                <i class="fa-solid fa-minus text-[10px]"></i>
+                                            </button>
                                             
-                                            <span class="w-8 h-8 flex items-center justify-center text-sm font-bold text-slate-800 border-x border-gray-200">
+                                            <!-- Live Counter View -->
+                                            <span id="qty-val-<?= $index; ?>" data-current-qty="<?= $item['quantity']; ?>" class="w-8 h-8 flex items-center justify-center text-sm font-bold text-slate-800 border-x border-gray-200">
                                                 <?= $item['quantity']; ?>
                                             </span>
                                             
-                                            <!-- plus button form (Validates against available stock instead of hardcoded numbers) -->
-                                            <form method="POST" class="inline plus-qty-form" onsubmit="return verifyPlusAction(this, <?= $item['quantity']; ?>, <?= $item_stock; ?>, '<?= htmlspecialchars(addslashes($item['title'])); ?>')">
-                                                <input type="hidden" name="action" value="update_qty">
-                                                <input type="hidden" name="index" value="<?= $index; ?>">
-                                                <?php if ($is_logged_in && isset($item['id'])): ?>
-                                                    <input type="hidden" name="cart_item_id" value="<?= $item['id']; ?>">
-                                                <?php endif; ?>
-                                                <input type="hidden" name="new_qty" value="<?= $item['quantity'] + 1; ?>">
-                                                <button type="submit" class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-r-lg transition-colors duration-200 font-bold">
-                                                    <i class="fa-solid fa-plus text-[10px]"></i>
-                                                </button>
-                                            </form>
+                                            <!-- Plus Button -->
+                                            <button type="button" 
+                                                    onclick="changeQuantity(<?= $index; ?>, <?= $cart_item_id; ?>, 1)"
+                                                    id="btn-plus-<?= $index; ?>"
+                                                    class="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-r-lg transition-colors duration-200 font-bold">
+                                                <i class="fa-solid fa-plus text-[10px]"></i>
+                                            </button>
                                         </div>
                                     </td>
-                                    <td class="p-4 text-center font-black text-slate-900">
-                                        <?= number_format($item['totalprice']); ?> MMK
+                                    <td class="p-4 text-center font-black text-slate-900 item-total-price">
+                                        <?= number_format($item['totalprice']); ?> ကျပ်
                                     </td>
                                     <td class="p-4 text-center">
-                                        <!-- Secure POST-based Removal Form ensuring clean responsive data destruction -->
                                         <form method="POST" class="inline" onsubmit="return confirm('ဒီစာအုပ်ကို ခြင်းတောင်းထဲကနေ ဖျက်မှာ သေချာပါသလား?');">
                                             <input type="hidden" name="action" value="remove_item">
                                             <input type="hidden" name="index" value="<?= $index; ?>">
-                                            <?php if ($is_logged_in && isset($item['id'])): ?>
+                                            <?php if ($is_logged_in): ?>
                                                 <input type="hidden" name="cart_item_id" value="<?= $item['id']; ?>">
                                             <?php endif; ?>
                                             <button type="submit" class="inline-flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors duration-200 shadow-sm shadow-red-500/20">
@@ -232,32 +300,23 @@ if ($cat_result) {
                 </div>
             </div>
 
-            <!-- Grand Total + Action Triggers -->
             <div class="mt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <h2 class="text-xl md:text-2xl font-black text-slate-900">
-                    Grand Total:
-                    <span class="text-amber-600"><?= number_format($grandTotal); ?> MMK</span>
+                    စုစုပေါင်း:
+                    <span id="cart-grand-total" class="text-amber-600"><?= number_format($grandTotal); ?> ကျပ်</span>
                 </h2>
-                <div class="flex gap-3">
+                <div class="flex gap-3 w-full sm:w-auto justify-end">
                     <a href="books.php"
                        class="inline-flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-200">
                         <i class="fa-solid fa-arrow-left text-xs"></i> Continue Shopping
                     </a>
-                    <?php if ($is_logged_in): ?>
-                        <a href="checkout.php" onclick="return verifyCheckoutStock(event, this.href)"
-                           class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-200 shadow-sm shadow-amber-500/20">
-                            Checkout <i class="fa-solid fa-arrow-right text-xs"></i>
-                        </a>
-                    <?php else: ?>
-                        <a href="../auth/login.php?redirect=checkout.php" onclick="return verifyCheckoutStock(event, this.href)"
-                           class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-200 shadow-sm shadow-amber-500/20">
-                            Checkout <i class="fa-solid fa-arrow-right text-xs"></i>
-                        </a>
-                    <?php endif; ?>
+                    <a href="checkout.php"
+                       class="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-200 shadow-sm shadow-amber-500/20">
+                        Checkout <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </a>
                 </div>
             </div>
         <?php else: ?>
-            <!-- Empty Cart Visual Component -->
             <div class="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center">
                 <i class="fa-solid fa-cart-shopping text-5xl text-gray-200 mb-4"></i>
                 <h2 class="text-xl font-bold text-gray-500">Your Cart is Empty</h2>
@@ -272,20 +331,15 @@ if ($cat_result) {
 
     <?php include __DIR__ . '/../auth/footer.php'; ?>
 
-    <!-- Client-side script handling realtime stock intercept animations -->
     <script>
-    // Trigger and fade in custom toast layout alert window
     function displayCartToast(msg) {
         const toast = document.getElementById('cartStockToast');
         document.getElementById('toastMessage').innerText = msg;
         toast.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
         toast.classList.add('translate-x-0', 'opacity-100');
-        
-        // Setup automatic timer to close window state
         setTimeout(hideCartToast, 4500);
     }
 
-    // Dismiss custom warning alert notification component
     function hideCartToast() {
         const toast = document.getElementById('cartStockToast');
         if(toast) {
@@ -294,39 +348,67 @@ if ($cat_result) {
         }
     }
 
-    // Intercept single increment addition requests based on book stock
-    function verifyPlusAction(formObj, currentQty, availableStock, bookTitle) {
-        if ((currentQty + 1) > availableStock) {
-            displayCartToast(`"${bookTitle}" အတွက် သင်မှာယူထားသော အရေအတွက်သည် ဆိုင်ရှိလက်ကျန်အရေအတွက် (${availableStock} အုပ်) ထက် များနေပါသဖြင့် ထပ်မံတိုးမြှင့်၍ မရနိုင်တော့ပါဗျာ။`);
-            return false;
+    function changeQuantity(index, cartItemId, adjustment) {
+        const qtyElement = document.getElementById(`qty-val-${index}`);
+        const rowElement = document.getElementById(`row-${index}`);
+        const currentQty = parseInt(qtyElement.getAttribute('data-current-qty'));
+        const availableStock = parseInt(rowElement.getAttribute('data-stock'));
+        const bookTitle = rowElement.getAttribute('data-title');
+        
+        const newQty = currentQty + adjustment;
+
+        if (newQty < 1) return;
+        
+        // Prevent action if trying to increase quantity beyond current physical stock level
+        if (adjustment === 1 && availableStock <= 0) {
+            displayCartToast(`"${bookTitle}" အတွက် သင်မှာယူထားသော အရေအတွက်သည် ဆိုင်ရှိလက်ကျန်အရေအတွက်ထက် များနေပါသဖြင့် ထပ်မံတိုးမြှင့်၍ မရနိုင်တော့ပါဗျာ။`);
+            return;
         }
-        return true;
-    }
 
-    // Intercept validation checks before checkout actions
-    function verifyCheckoutStock(event, redirectUrl) {
-        const cartRows = document.querySelectorAll('.cart-item-row');
-        let stockViolationDetected = false;
-        let violationMsg = "";
+        // Send Async Call to update database and session records instantly
+        const formData = new FormData();
+        formData.append('ajax_action', 'update_qty');
+        formData.append('index', index);
+        formData.append('new_qty', newQty);
+        if (cartItemId > 0) {
+            formData.append('cart_item_id', cartItemId);
+        }
 
-        for (let row of cartRows) {
-            const title = row.getAttribute('data-title');
-            const stock = parseInt(row.getAttribute('data-stock')) || 0;
-            const currentQty = parseInt(row.getAttribute('data-qty')) || 0;
+        fetch('cart.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update live text counter bindings
+                qtyElement.innerText = newQty;
+                qtyElement.setAttribute('data-current-qty', newQty);
+                
+                // Adjust dynamic remaining stock indicator inside current DOM row state
+                const updatedStock = availableStock - adjustment;
+                rowElement.setAttribute('data-stock', updatedStock);
 
-            if (currentQty > stock) {
-                stockViolationDetected = true;
-                violationMsg = `"${title}" မှာ စတိုးဆိုင်တွင် လက်ကျန် ${stock} အုပ်သာ ကျန်ရှိပါတော့သည်။ သင်မှာယူထားသော အရေအတွက် (${currentQty} အုပ်) ထက် ကျော်လွန်နေသဖြင့် ရှေ့ဆက်သွား၍ မရနိုင်သေးပါဗျာ။`;
-                break;
+                // Update Row Total and Grand Total View
+                rowElement.querySelector('.item-total-price').innerText = data.new_item_total;
+                document.getElementById('cart-grand-total').innerText = data.grand_total;
+
+                // Disable or enable minus button dynamically
+                const minusBtn = document.getElementById(`btn-minus-${index}`);
+                if (newQty <= 1) {
+                    minusBtn.classList.add('opacity-40', 'cursor-not-allowed');
+                    minusBtn.setAttribute('disabled', 'true');
+                } else {
+                    minusBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+                    minusBtn.removeAttribute('disabled');
+                }
+            } else {
+                displayCartToast(data.message || 'ပစ္စည်းလက်ကျန် မလုံလောက်ပါသဖြင့် မအောင်မြင်ပါ။');
             }
-        }
-
-        if (stockViolationDetected) {
-            event.preventDefault(); // Stop standard routing page transition
-            displayCartToast(violationMsg);
-            return false;
-        }
-        return true;
+        })
+        .catch(err => {
+            console.error('AJAX quantity synchronous update failed:', err);
+        });
     }
     </script>
 </body>

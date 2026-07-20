@@ -2,40 +2,42 @@
 session_start();
 require_once "../config/db.php";
 
-// Accept both logged-in customers and guests
+// Check if user is logged in as a customer
 $is_logged_in = isset($_SESSION['user_id']) && $_SESSION['user_role'] === 'customer';
 
-// Receive Data
+// Receive Book ID and Quantity from POST
 $book_id = isset($_POST['book_id']) ? intval($_POST['book_id']) : 0;
 $quantity = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
 
+// Redirect if no book ID is provided
 if ($book_id <= 0) {
-    header("Location: books.php");
+    header("Location: userdashboard.php");
     exit();
 }
 
-// Get Book Information
+// Get Book Information from Database
 $stmt = $conn->prepare("SELECT * FROM Books WHERE id = ?");
 $stmt->bind_param("i", $book_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows == 0) {
-    header("Location: books.php?error=notfound");
+    header("Location: userdashboard.php?error=notfound");
     exit();
 }
 
 $book = $result->fetch_assoc();
 $price = $book['price'];
+$available_stock = intval($book['stock']);
 
-// Check Stock
-if ($quantity > $book['stock']) {
-    header("Location: bookdetail.php?id=" . $book_id . "&error=stock");
+// Check Input Quantity against Stock Availability
+if ($quantity > $available_stock) {
+    header("Location: userdashboard.php?error=stock");
     exit();
 }
 
+// Logic for Logged-in Users
 if ($is_logged_in) {
-    // Database-based cart for logged-in users
     $user_id = $_SESSION['user_id'];
 
     $stmt2 = $conn->prepare("SELECT * FROM Cart_item WHERE user_id = ? AND book_id = ?");
@@ -48,25 +50,32 @@ if ($is_logged_in) {
         $newQty = $row['quantity'] + $quantity;
         $total = $newQty * $price;
 
+        // Update Cart Item Quantity
         $update = $conn->prepare("UPDATE Cart_item SET quantity = ?, totalprice = ? WHERE id = ?");
         $update->bind_param("idi", $newQty, $total, $row['id']);
         $update->execute();
     } else {
         $total = $price * $quantity;
+        // Insert New Item into Cart
         $insert = $conn->prepare("INSERT INTO Cart_item (user_id, book_id, quantity, unit_price, totalprice) VALUES (?, ?, ?, ?, ?)");
         $insert->bind_param("iiidd", $user_id, $book_id, $quantity, $price, $total);
         $insert->execute();
     }
 
+    // Deduct stock immediately from Books table
+    $update_stock_stmt = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
+    $update_stock_stmt->bind_param("ii", $quantity, $book_id);
+    $update_stock_stmt->execute();
+    $update_stock_stmt->close();
+
     header("Location: cart.php");
     exit();
 } else {
-    // Session-based cart for guests
+    // Logic for Guest Users (Session-based cart)
     if (!isset($_SESSION['guest_cart'])) {
         $_SESSION['guest_cart'] = [];
     }
 
-    // Check if book already in guest cart
     $found = false;
     foreach ($_SESSION['guest_cart'] as &$item) {
         if ($item['book_id'] == $book_id) {
@@ -88,6 +97,12 @@ if ($is_logged_in) {
             'totalprice' => $price * $quantity
         ];
     }
+
+    // Deduct stock immediately from Books table for guest user
+    $update_stock_stmt = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
+    $update_stock_stmt->bind_param("ii", $quantity, $book_id);
+    $update_stock_stmt->execute();
+    $update_stock_stmt->close();
 
     header("Location: cart.php");
     exit();

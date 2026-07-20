@@ -27,13 +27,13 @@ $base_url = '/onlinebookshop';
                     လူကြီးမင်းတို့ စိတ်ကြိုက် သုတ၊ ရသ စာအုပ်အမျိုးမျိုးကို တစ်နေရာတည်းမှာ အလွယ်တကူ ဝယ်ယူဖတ်ရှုနိုင်မယ့် မြန်မာ့အကောင်းဆုံး အွန်လိုင်းစာအုပ်ဆိုင် ဖြစ်ပါတယ်။
                 </p>
                 <div class="flex items-center gap-2.5 pt-2">
-                    <a href="https://facebook.com" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Facebook">
+                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Facebook">
                         <i class="fa-brands fa-facebook-f"></i>
                     </a>
-                    <a href="https://viber.com" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Viber">
+                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Viber">
                         <i class="fa-brands fa-viber"></i>
                     </a>
-                    <a href="https://telegram.org" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Telegram">
+                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Telegram">
                         <i class="fa-brands fa-telegram"></i>
                     </a>
                 </div>
@@ -106,12 +106,12 @@ $base_url = '/onlinebookshop';
     </div>
 
     <!-- Bottom Copyright Bar -->
-    <div class="bg-slate-950 text-gray-500 text-center py-4 text-xs border-t border-slate-800/40">
+    <!-- <div class="bg-slate-950 text-gray-500 text-center py-4 text-xs border-t border-slate-800/40">
         <div class="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2.5">
             <p>&copy; <?= date('Y'); ?> Online Book Shop. All rights reserved.</p>
             <p class="text-[11px] text-gray-600 flex items-center gap-1.5">
                 Developed with <i class="fa-solid fa-heart text-red-500/80 animate-pulse"></i> for Book Lovers
             </p>
         </div>
-    </div>
+    </div> -->
 </footer>

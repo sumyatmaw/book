@@ -15,6 +15,14 @@ $admin_name = $_SESSION['user_name'] ?? 'Admin User';
 $admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
 $admin_initial = strtoupper(substr($admin_name, 0, 1));
 
+// Sync Profile Image from Database if not available in current session
+if (!isset($_SESSION['user_image']) && isset($conn)) {
+    $u_query = mysqli_query($conn, "SELECT profile_image FROM Users WHERE id = '$admin_id'");
+    if ($u_query && $u_row = mysqli_fetch_assoc($u_query)) {
+        $_SESSION['user_image'] = $u_row['profile_image'];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Add Category
     if (isset($_POST['add_category'])) {
@@ -215,8 +223,15 @@ if (isset($_GET['edit_id'])) {
                 
                 <!-- Admin Profile Menu -->
                 <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
-                        <i class="fa-solid fa-user text-sm"></i>
+                    <!-- CHANGED: Profile Button with Dynamic Image View Setup -->
+                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full border border-slate-200 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer overflow-hidden bg-slate-100">
+                        <?php if (!empty($_SESSION['user_image'])): ?>
+                            <img src="/onlinebookshop/uploads/profile/<?php echo $_SESSION['user_image']; ?>" 
+                                 class="w-full h-full object-cover" 
+                                 alt="Admin Profile">
+                        <?php else: ?>
+                            <i class="fa-solid fa-user text-sm text-slate-600"></i>
+                        <?php endif; ?>
                     </button>
 
                     <!-- Admin Profile Dropdown Menu -->

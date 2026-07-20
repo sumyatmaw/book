@@ -10,8 +10,22 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
 
 $message = "";
 $error = "";
+$admin_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 1;
 $admin_name = $_SESSION['user_name'] ?? 'Admin User';
 $admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
+
+// Fetch current admin profile image from session or database (Default: placeholder)
+$admin_image = $_SESSION['user_image'] ?? ''; 
+if (empty($admin_image)) {
+    // Optional fallback: Fetch from Users table if you store it there
+    $admin_query = mysqli_query($conn, "SELECT image FROM Users WHERE id = $admin_id");
+    if ($admin_query && mysqli_num_rows($admin_query) > 0) {
+        $admin_row = mysqli_fetch_assoc($admin_query);
+        $admin_image = $admin_row['image'] ?? '';
+    }
+}
+// Set standard folder path for profile images
+$profile_path = !empty($admin_image) ? "../uploads/profile/" . $admin_image : "";
 
 // Handle Approve/Reject actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -99,9 +113,12 @@ $paid = $conn->query("SELECT COUNT(*) as t FROM Payment WHERE status='paid'")->f
 $rejected = $conn->query("SELECT COUNT(*) as t FROM Payment WHERE status='rejected'")->fetch_assoc()['t'] ?? 0;
 $totalAmount = $conn->query("SELECT SUM(amount) as t FROM Payment WHERE status='paid'")->fetch_assoc()['t'] ?? 0;
 
-$low_stock_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Books WHERE stock < 4");
+// Fetch Live Alert Badge & Dropdown Notifications (Synced with categories.php layout)
+$low_stock_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Books WHERE stock < 3");
 $low_stock_count = mysqli_fetch_assoc($low_stock_query)['total'] ?? 0;
-$pending_payments_count = $pending;
+
+$pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
+$pending_payments_count = mysqli_num_rows($pending_payments_query);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -160,7 +177,6 @@ $pending_payments_count = $pending;
             </nav>
         </div>
         
-        <!-- Premium Red Sign Out Button in Sidebar -->
         <div class="p-4 border-t border-slate-800 bg-slate-950/30">
             <a href="../auth/logout.php" class="flex items-center justify-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-rose-600/20 group">
                 <i class="fa-solid fa-right-from-bracket group-hover:transform group-hover:translate-x-0.5 transition"></i><span>Sign Out</span>
@@ -168,7 +184,6 @@ $pending_payments_count = $pending;
         </div>
     </aside>
 
-    <!-- Overlay background for Mobile Sidebar -->
     <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/40 z-40 hidden transition-opacity duration-300"></div>
 
     <div class="flex-1 flex flex-col overflow-hidden w-full">
@@ -192,22 +207,42 @@ $pending_payments_count = $pending;
                         <?php endif; ?>
                     </button>
 
-                    <!-- Notifications Dropdown -->
+                    <!-- Notifications Dropdown (Populates live operational details upon clicking) -->
                     <div id="notiDropdown" class="hidden absolute right-0 top-12 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
-                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 font-bold text-xs text-slate-700">System Alerts</div>
-                        <div class="p-4 text-center text-xs text-slate-400 font-semibold">
-                            <?php echo ($low_stock_count + $pending_payments_count > 0) ? "You have system alerts pending." : "No new notifications."; ?>
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 font-bold text-xs text-slate-700">Notifications</div>
+                        <div class="divide-y divide-slate-100 max-h-64 overflow-y-auto no-scrollbar">
+                            <?php if ($pending_payments_count > 0): ?>
+                                <?php while($payment = mysqli_fetch_assoc($pending_payments_query)): ?>
+                                <a href="manage_payment.php" class="block p-3 hover:bg-slate-50 transition">
+                                    <p class="text-xs font-bold text-indigo-600 flex items-center"><i class="fa-solid fa-wallet mr-1.5"></i> New Bank Transfer Pending</p>
+                                    <p class="text-xxs text-slate-500 mt-0.5">Amount: <?php echo number_format($payment['amount']); ?> MMK awaiting approval.</p>
+                                </a>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+
+                            <?php if ($low_stock_count > 0): ?>
+                                <div class="block p-3 bg-amber-50/40">
+                                    <p class="text-xs font-bold text-amber-600 flex items-center"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Critical Stock Warning</p>
+                                    <p class="text-xxs text-slate-500 mt-0.5">You have <?php echo $low_stock_count; ?> books currently running low on stock.</p>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($low_stock_count == 0 && $pending_payments_count == 0): ?>
+                                <div class="p-4 text-center text-xs text-slate-400 font-medium">No new operational notifications.</div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Admin Profile Menu -->
+                <!-- Admin Profile Menu Button (Updated with Profile Image View directly matching orders.php) -->
                 <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
-                        <i class="fa-solid fa-user text-sm"></i>
+                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer overflow-hidden">
+                        <?php if (!empty($profile_path) && file_exists($profile_path)): ?>
+                            <img src="<?= htmlspecialchars($profile_path); ?>" alt="Admin" class="w-full h-full object-cover">
+                        <?php else: ?>
+                            <i class="fa-solid fa-user text-sm"></i>
+                        <?php endif; ?>
                     </button>
-
-                    <!-- Admin Profile Dropdown Menu -->
                     <div id="profileDropdown" class="hidden absolute right-0 top-12 w-48 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
                         <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
                             <p class="text-xs font-bold text-slate-800 truncate"><?php echo htmlspecialchars($admin_name); ?></p>
@@ -287,187 +322,112 @@ $pending_payments_count = $pending;
                             <i class="fa-solid fa-wallet text-sm"></i>
                         </div>
                     </div>
-                    <h3 class="text-lg sm:text-xl font-black text-gray-900">MMK <?= number_format($totalAmount); ?></h3>
+                    <h3 class="text-lg sm:text-xl font-black text-gray-900"> <?= number_format($totalAmount); ?>ကျပ်</h3>
                     <p class="text-[11px] text-gray-400 mt-0.5">Total Collected</p>
                 </div>
             </div>
 
             <!-- Desktop table -->
-            <div class="hidden lg:block bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-                <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-receipt text-indigo-500"></i> All Transactions
-                    </h3>
-                </div>
+            <div class="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-50/70 text-gray-400 uppercase text-[11px] tracking-wider border-b border-slate-100">
-                            <tr>
-                                <th class="px-5 py-3 text-left font-semibold">Order</th>
-                                <th class="px-5 py-3 text-left font-semibold">Customer</th>
-                                <th class="px-5 py-3 text-left font-semibold">Method</th>
-                                <th class="px-5 py-3 text-left font-semibold">Amount</th>
-                                <th class="px-5 py-3 text-left font-semibold">Ref</th>
-                                <th class="px-5 py-3 text-left font-semibold">Slip</th>
-                                <th class="px-5 py-3 text-left font-semibold">Date</th>
-                                <th class="px-5 py-3 text-left font-semibold">Status</th>
-                                <th class="px-5 py-3 text-right font-semibold">Actions</th>
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase text-slate-500 tracking-wider">
+                                <th class="py-4 px-6">Order ID</th>
+                                <th class="py-4 px-6">Customer</th>
+                                <th class="py-4 px-6">Method</th>
+                                <th class="py-4 px-6">Ref ID</th>
+                                <th class="py-4 px-6">Slip</th>
+                                <th class="py-4 px-6">Status</th>
+                                <th class="py-4 px-6 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
+                        <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
                             <?php if ($result && $result->num_rows > 0): ?>
-                                <?php while ($row = $result->fetch_assoc()):
-                                    $st = $row['status'];
-                                    $st_class = match(strtolower($st)) {
-                                        'paid' => 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
-                                        'rejected' => 'bg-red-50 text-red-700 border-red-200/60',
-                                        default => 'bg-amber-50 text-amber-700 border-amber-200/40'
-                                    };
-                                ?>
-                                <tr class="hover:bg-slate-50/40 transition">
-                                    <td class="px-5 py-3">
-                                        <a href="orderdetail.php?id=<?= $row['order_id']; ?>" class="font-bold text-indigo-600 hover:text-indigo-700">
-                                            #<?= htmlspecialchars($row['order_number'] ?? $row['order_id']); ?>
-                                        </a>
-                                    </td>
-                                    <td class="px-5 py-3 font-semibold text-slate-900"><?= htmlspecialchars($row['customer_name'] ?? 'Unknown'); ?></td>
-                                    <td class="px-5 py-3 text-gray-600"><?= htmlspecialchars($row['method_name'] ?? 'N/A'); ?></td>
-                                    <td class="px-5 py-3 font-black text-slate-900">MMK <?= number_format($row['amount']); ?></td>
-                                    <td class="px-5 py-3 font-mono text-[11px] text-gray-500 max-w-[120px] truncate"><?= htmlspecialchars($row['transaction_ref'] ?? '-'); ?></td>
-                                    <td class="px-5 py-3">
-                                        <?php if (!empty($row['payment_slip'])): ?>
-                                            <a href="../uploads/<?= htmlspecialchars($row['payment_slip']); ?>" target="_blank" class="text-indigo-500 hover:text-indigo-600 font-semibold inline-flex items-center gap-1">
-                                                <i class="fa-solid fa-image"></i> View
-                                            </a>
-                                        <?php else: ?>
-                                            <span class="text-gray-300">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="px-5 py-3 text-gray-400 whitespace-nowrap"><?= date('M d, Y H:i', strtotime($row['payment_date'])); ?></td>
-                                    <td class="px-5 py-3">
-                                        <span class="px-2 py-0.5 text-[11px] font-bold rounded-lg border <?= $st_class; ?>"><?= ucfirst($st); ?></span>
-                                    </td>
-                                    <td class="px-5 py-3 text-right">
-                                        <?php if (strtolower($st) === 'pending'): ?>
-                                            <div class="flex items-center justify-end gap-1.5">
-                                                <form method="POST" action="">
-                                                    <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
-                                                    <button type="submit" name="approve_payment"
-                                                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm shadow-indigo-600/10 cursor-pointer flex items-center gap-1">
-                                                        <i class="fa-solid fa-check text-[10px]"></i> Approve
-                                                    </button>
-                                                </form>
-                                                <form method="POST" action="">
-                                                    <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
-                                                    <button type="submit" name="reject_payment"
-                                                            class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm shadow-rose-600/10 cursor-pointer flex items-center gap-1">
-                                                        <i class="fa-solid fa-times text-[10px]"></i> Reject
-                                                    </button>
-                                                </form>
+                                <?php while($row = $result->fetch_assoc()): ?>
+                                    <tr class="hover:bg-slate-50/80 transition">
+                                        <td class="py-4 px-6 font-bold text-slate-900">#<?= htmlspecialchars($row['order_id']); ?></td>
+                                        <td class="py-4 px-6 font-medium"><?= htmlspecialchars($row['customer_name'] ?? 'Unknown'); ?></td>
+                                        <td class="py-4 px-6"><span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold uppercase"><?= htmlspecialchars($row['method_name'] ?? 'Online'); ?></span></td>
+                                        <td class="py-4 px-6 font-mono text-xs tracking-wide text-slate-500"><?= htmlspecialchars($row['transaction_ref']); ?></td>
+                                        <td class="py-4 px-6">
+                                            <?php if (!empty($row['payment_slip'])): ?>
+                                                <button type="button" onclick="openSlipModal('../assets/<?= htmlspecialchars($row['payment_slip']); ?>')" class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition bg-indigo-50 hover:bg-indigo-100 py-1.5 px-3 rounded-lg cursor-pointer">
+                                                    <i class="fa-regular fa-image"></i> View
+                                                </button>
+                                            <?php else: ?>
+                                                <span class="text-xs text-slate-400 italic">No slip</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="py-4 px-6">
+                                            <?php 
+                                            $status = strtolower($row['status']);
+                                            if ($status === 'paid') echo '<span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold">Paid</span>';
+                                            elseif ($status === 'rejected') echo '<span class="px-2.5 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold">Rejected</span>';
+                                            else echo '<span class="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold">Pending</span>';
+                                            ?>
+                                        </td>
+                                        <td class="py-4 px-6">
+                                            <div class="flex items-center justify-center gap-2">
+                                                <?php if ($status === 'pending'): ?>
+                                                    <form action="" method="POST" onsubmit="return confirm('Approve this payment?');">
+                                                        <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
+                                                        <button type="submit" name="approve_payment" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition shadow-sm cursor-pointer">Approve</button>
+                                                    </form>
+                                                    <form action="" method="POST" onsubmit="return confirm('Reject this payment?');">
+                                                        <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
+                                                        <button type="submit" name="reject_payment" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition shadow-sm cursor-pointer">Reject</button>
+                                                    </form>
+                                                <?php else: ?>
+                                                    <span class="text-xs text-slate-400 italic">Processed</span>
+                                                <?php endif; ?>
                                             </div>
-                                        <?php else: ?>
-                                            <span class="text-gray-400">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
+                                        </td>
+                                    </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
-                                <tr><td colspan="9" class="py-12 text-center text-gray-400 font-semibold">No payment records found.</td></tr>
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-sm text-slate-400 font-medium">No payment history discovered.</td>
+                                </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
-
-            <!-- Mobile card list -->
-            <div class="lg:hidden space-y-3">
-                <?php if ($result && $result->num_rows > 0): ?>
-                    <?php
-                    $result->data_seek(0);
-                    while ($row = $result->fetch_assoc()):
-                        $st = $row['status'];
-                        $st_class = match(strtolower($st)) {
-                            'paid' => 'bg-emerald-50 text-emerald-700 border border-emerald-200/40',
-                            'rejected' => 'bg-rose-50 text-rose-700 border border-rose-200/40',
-                            default => 'bg-amber-50 text-amber-700 border border-amber-200/40'
-                        };
-                    ?>
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
-                        <div class="flex items-start justify-between gap-3 mb-3">
-                            <div class="min-w-0">
-                                <a href="orderdetail.php?id=<?= $row['order_id']; ?>" class="font-bold text-indigo-600 text-sm">
-                                    #<?= htmlspecialchars($row['order_number'] ?? $row['order_id']); ?>
-                                </a>
-                                p class="text-xs text-slate-900 font-semibold mt-0.5"><?= htmlspecialchars($row['customer_name'] ?? 'Unknown'); ?></p>
-                            </div>
-                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-lg <?= $st_class; ?> shrink-0"><?= ucfirst($st); ?></span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2 text-xs mb-3 font-medium">
-                            <div>
-                                <span class="text-gray-400">Amount</span>
-                                <p class="font-black text-slate-900">MMK <?= number_format($row['amount']); ?></p>
-                            </div>
-                            <div>
-                                <span class="text-gray-400">Method</span>
-                                <p class="text-slate-700 font-semibold"><?= htmlspecialchars($row['method_name'] ?? 'N/A'); ?></p>
-                            </div>
-                            <div>
-                                <span class="text-gray-400">Ref</span>
-                                <p class="font-mono text-gray-600 truncate"><?= htmlspecialchars($row['transaction_ref'] ?? '-'); ?></p>
-                            </div>
-                            <div>
-                                <span class="text-gray-400">Date</span>
-                                <p class="text-gray-600"><?= date('M d, H:i', strtotime($row['payment_date'])); ?></p>
-                            </div>
-                        </div>
-                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
-                            <?php if (!empty($row['payment_slip'])): ?>
-                                <a href="../uploads/<?= htmlspecialchars($row['payment_slip']); ?>" target="_blank" class="text-indigo-500 hover:text-indigo-600 font-semibold text-xs inline-flex items-center gap-1">
-                                    <i class="fa-solid fa-image"></i> View Slip
-                                </a>
-                            <?php else: ?>
-                                <span class="text-gray-300 text-xs">No slip</span>
-                            <?php endif; ?>
-                            <?php if (strtolower($st) === 'pending'): ?>
-                                <div class="flex items-center gap-1.5">
-                                    <form method="POST" action="">
-                                        <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
-                                        <button type="submit" name="approve_payment"
-                                                class="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition shadow-sm cursor-pointer flex items-center gap-1">
-                                            <i class="fa-solid fa-check text-[9px]"></i> Approve
-                                        </button>
-                                    </form>
-                                    <form method="POST" action="">
-                                        <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
-                                        <button type="submit" name="reject_payment"
-                                                class="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition shadow-sm cursor-pointer flex items-center gap-1">
-                                            <i class="fa-solid fa-times text-[9px]"></i> Reject
-                                        </button>
-                                    </form>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <?php endwhile; ?>
-                <?php else: ?>
-                    <div class="bg-white p-12 rounded-xl border border-slate-200/60 shadow-sm text-center">
-                        <i class="fa-solid fa-receipt text-4xl text-gray-200 mb-3"></i>
-                        <p class="text-gray-400 font-semibold text-sm">No payment records found.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
         </main>
     </div>
 </div>
 
+<!-- ================= IMAGE POPUP MODAL ================= -->
+<div id="slipModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+    <div class="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-receipt text-indigo-600"></i> Customer Payment Slip
+            </h3>
+            <button onclick="closeSlipModal()" class="w-7 h-7 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 transition cursor-pointer">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+        <div class="p-4 bg-slate-100/50 overflow-y-auto flex items-center justify-center flex-1 min-h-[300px]">
+            <img id="modalSlipImage" src="" alt="Payment Slip Screenshot" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-slate-200">
+        </div>
+        <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-100 text-right">
+            <button onclick="closeSlipModal()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-4 rounded-xl transition cursor-pointer">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
-    // Sidebar & Dropdown Navigation UI Controller
+    // Sidebar Toggles
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         sidebar.classList.toggle('-translate-x-full');
-        if(overlay) overlay.classList.toggle('hidden');
+        overlay.classList.toggle('hidden');
     }
+
+    // Header Popups Configs 
     function toggleNotificationDropdown(e) {
         e.stopPropagation();
         document.getElementById('notiDropdown').classList.toggle('hidden');
@@ -478,16 +438,37 @@ $pending_payments_count = $pending;
         document.getElementById('profileDropdown').classList.toggle('hidden');
         document.getElementById('notiDropdown').classList.add('hidden');
     }
-    window.addEventListener('click', function(e) {
-        const notiDropdown = document.getElementById('notiDropdown');
-        const profileDropdown = document.getElementById('profileDropdown');
-        if (notiDropdown && !notiDropdown.contains(e.target) && !document.getElementById('notiBtn').contains(e.target)) {
-            notiDropdown.classList.add('hidden');
-        }
-        if (profileDropdown && !profileDropdown.contains(e.target) && !document.getElementById('profileBtn').contains(e.target)) {
-            profileDropdown.classList.add('hidden');
-        }
+    document.addEventListener('click', () => {
+        document.getElementById('notiDropdown').classList.add('hidden');
+        document.getElementById('profileDropdown').classList.add('hidden');
     });
+
+    // Modal Operations Scripts
+    function openSlipModal(imageSrc) {
+        const modal = document.getElementById('slipModal');
+        const img = document.getElementById('modalSlipImage');
+        
+        img.src = imageSrc;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            modal.querySelector('.transform').classList.remove('scale-95');
+        }, 10);
+    }
+
+    function closeSlipModal() {
+        const modal = document.getElementById('slipModal');
+        
+        modal.classList.add('opacity-0');
+        modal.querySelector('.transform').classList.add('scale-95');
+        
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }, 300);
+    }
 </script>
 </body>
 </html>

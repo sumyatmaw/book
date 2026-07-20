@@ -15,6 +15,22 @@ $admin_name = $_SESSION['user_name'] ?? 'Admin User';
 $admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
 $admin_initial = strtoupper(substr($admin_name, 0, 1));
 
+// Fetch Admin Profile Image from Users Table
+$admin_image = "default-admin.png"; 
+$admin_img_stmt = $conn->prepare("SELECT profile_image FROM Users WHERE id = ?");
+if ($admin_img_stmt) {
+    $admin_img_stmt->bind_param("i", $admin_id);
+    $admin_img_stmt->execute();
+    $admin_img_res = $admin_img_stmt->get_result();
+    if ($admin_img_res->num_rows > 0) {
+        $admin_row = $admin_img_res->fetch_assoc();
+        if (!empty($admin_row['profile_image'])) {
+            $admin_image = $admin_row['profile_image'];
+        }
+    }
+    $admin_img_stmt->close();
+}
+
 // -------------------------------------------------------------------------
 // POST ACTIONS (ADD, UPDATE, DELETE)
 // -------------------------------------------------------------------------
@@ -303,10 +319,14 @@ if (isset($_GET['edit_id'])) {
                     </div>
                 </div>
                 
-                <!-- Admin Profile Menu -->
+                <!-- Admin Profile Menu with Dynamic Profile Image -->
                 <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
-                        <i class="fa-solid fa-user text-sm"></i>
+                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full overflow-hidden bg-slate-100 border border-slate-200 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
+                        <?php if(!empty($admin_image) && file_exists("../uploads/profile/" . $admin_image)): ?>
+                            <img src="../uploads/profile/<?= htmlspecialchars($admin_image); ?>" alt="Admin" class="w-full h-full object-cover">
+                        <?php else: ?>
+                            <div class="w-full h-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs"><?= $admin_initial; ?></div>
+                        <?php endif; ?>
                     </button>
 
                     <!-- Admin Profile Dropdown Menu -->
@@ -385,7 +405,7 @@ if (isset($_GET['edit_id'])) {
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Price (MMK)</label>
+                                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Price (ကျပ်)</label>
                                 <input type="number" step="0.01" name="price" required value="<?= $editBook ? $editBook['price'] : ''; ?>" class="bg-slate-50/80 text-xs w-full rounded-xl p-2.5 border border-slate-200 outline-none focus:border-indigo-500 transition">
                             </div>
                             <div>
@@ -460,7 +480,7 @@ if (isset($_GET['edit_id'])) {
                                                 <span class="bg-slate-100 px-2 py-1 rounded-md text-[11px]"><?= htmlspecialchars($row['category_name'] ?? 'Uncategorized'); ?></span>
                                             </td>
                                             <td class="px-6 py-3 font-bold text-slate-900">
-                                                <?= number_format($row['price']); ?> MMK
+                                                <?= number_format($row['price']); ?> ကျပ်
                                             </td>
                                             <td class="px-6 py-3">
                                                 <?php if($row['stock'] >= 3): ?>
@@ -469,7 +489,7 @@ if (isset($_GET['edit_id'])) {
                                                     </span>
                                                 <?php else: ?>
                                                     <span class="inline-flex items-center px-2 py-0.5 rounded-md font-bold text-[11px] bg-rose-50 text-rose-700 border border-rose-100">
-                                                        <?= $row['stock']; ?> အုပ်
+                                                        <?= $row['stock']; ?>  အုပ်
                                                     </span>
                                                 <?php endif; ?>
                                             </td>

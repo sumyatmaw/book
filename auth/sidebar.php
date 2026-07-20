@@ -1,0 +1,83 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$base_url     = '/onlinebookshop'; // မိမိ project folder နာမည်အလိုက် လိုအပ်သလို ပြောင်းနိုင်သည်
+$current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
+$is_admin     = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+
+// Active ဖြစ်နေတဲ့ menu item တွေကို အရောင်ပြောင်းပေးမယ့် function
+function sidebar_active($page) {
+    global $current_page;
+    return $current_page === $page 
+        ? 'bg-indigo-600 text-white font-medium shadow-sm shadow-indigo-600/10' 
+        : 'hover:bg-slate-800 hover:text-white transition font-medium';
+}
+?>
+
+<!-- SIDEBAR CONTAINER -->
+<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-400 flex flex-col justify-between transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 border-r border-slate-800 shrink-0">
+    <div class="p-6 overflow-y-auto no-scrollbar flex-1">
+        <div class="flex items-center justify-between mb-8 px-2">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
+                    <i class="fa-solid fa-book-open text-sm"></i>
+                </div>
+                <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">BookShop</span>
+            </div>
+            <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-white cursor-pointer">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        
+        <nav class="space-y-1.5">
+            <?php if ($is_admin): ?>
+                <!-- ================= ADMIN SIDEBAR MENU ================= -->
+                <a href="<?= $base_url; ?>/admin/dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('dashboard'); ?>">
+                    <i class="fa-solid fa-chart-pie w-5"></i><span>Dashboard</span>
+                </a>
+                <a href="<?= $base_url; ?>/admin/books.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('books'); ?>">
+                    <i class="fa-solid fa-book w-5"></i><span>Manage Books</span>
+                </a>
+                <a href="<?= $base_url; ?>/admin/categories.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('categories'); ?>">
+                    <i class="fa-solid fa-tags w-5"></i><span>Categories</span>
+                </a>
+                <a href="<?= $base_url; ?>/admin/orders.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('orders'); ?>">
+                    <i class="fa-solid fa-cart-shopping w-5"></i><span>Orders</span>
+                </a>
+                <a href="<?= $base_url; ?>/admin/manage_payment.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('manage_payment'); ?>">
+                    <i class="fa-solid fa-credit-card w-5"></i><span>Payments</span>
+                </a>
+                <a href="<?= $base_url; ?>/admin/delivery.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('delivery'); ?>">
+                    <i class="fa-solid fa-truck w-5"></i><span>Deliveries</span>
+                </a>
+                <a href="<?= $base_url; ?>/admin/customers.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('customers'); ?>">
+                    <i class="fa-solid fa-users w-5"></i><span>Customers</span>
+                </a>
+
+            <?php else: ?>
+                <!-- ================= CUSTOMER SIDEBAR MENU ================= -->
+                <a href="<?= $base_url; ?>/user/userdashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('userdashboard'); ?>">
+                    <i class="fa-solid fa-chart-pie w-5"></i><span>My Dashboard</span>
+                </a>
+                <a href="<?= $base_url; ?>/user/myorders.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('myorders'); ?>">
+                    <i class="fa-solid fa-box w-5"></i><span>My Orders</span>
+                </a>
+                <a href="<?= $base_url; ?>/user/cart.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('cart'); ?>">
+                    <i class="fa-solid fa-shopping-basket w-5"></i><span>Shopping Cart</span>
+                </a>
+                <a href="<?= $base_url; ?>/user/userprofile.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('userprofile'); ?>">
+                    <i class="fa-solid fa-user w-5"></i><span>Profile Settings</span>
+                </a>
+            <?php endif; ?>
+        </nav>
+    </div>
+    
+    <!-- Premium Red Sign Out Button in Sidebar -->
+    <div class="p-4 border-t border-slate-800 bg-slate-950/30">
+        <a href="<?= $base_url; ?>/auth/logout.php" class="flex items-center justify-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-rose-600/20 group">
+            <i class="fa-solid fa-right-from-bracket group-hover:transform group-hover:translate-x-0.5 transition"></i><span>Sign Out</span>
+        </a>
+    </div>
+</aside>

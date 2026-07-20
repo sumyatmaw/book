@@ -90,7 +90,7 @@ $result = mysqli_query($conn,$sql);
                         </p>
                         
                         <p class="text-blue-600 font-bold mt-3 text-lg">
-                            <?php echo number_format($row['price']);?> MMK
+                            <?php echo number_format($row['price']);?> ကျပ်
                         </p>
                         
                         <p class="text-sm text-green-600 font-medium">

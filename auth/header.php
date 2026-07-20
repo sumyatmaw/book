@@ -15,7 +15,27 @@ $base_url     = '/onlinebookshop';
 // Session States
 $is_logged_in = isset($_SESSION['user_id']);
 $is_admin     = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
-$categories   = $categories ?? [];
+
+// Fetch user profile image dynamically if not set in session but logged in
+if ($is_logged_in && !isset($_SESSION['user_image']) && isset($conn)) {
+    $uid = $_SESSION['user_id'];
+    $u_query = mysqli_query($conn, "SELECT profile_image FROM Users WHERE id = '$uid'");
+    if ($u_query && $u_row = mysqli_fetch_assoc($u_query)) {
+        $_SESSION['user_image'] = $u_row['profile_image'];
+    }
+}
+
+// Dynamic Database Fetch for Categories Dropdown List
+$categories = [];
+if (isset($conn)) {
+    $cat_sql = "SELECT id, category_name FROM Categories ORDER BY category_name ASC";
+    $cat_result = $conn->query($cat_sql);
+    if ($cat_result && $cat_result->num_rows > 0) {
+        while ($row = $cat_result->fetch_assoc()) {
+            $categories[] = $row;
+        }
+    }
+}
 
 // Compute cart count and total for navbar display
 $cart_count = 0;
@@ -109,7 +129,6 @@ function nav_active(string $page): string {
                 </span>
             </a>
 
-            <!-- DESKTOP SEARCH BAR (Fixed yellow border issue on focus/hover) -->
             <form action="<?= $base_url; ?>/index.php" method="GET" class="hidden md:flex w-full max-w-sm lg:max-w-md mx-4">
                 <div class="relative w-full">
                     <input type="text" name="search"
@@ -122,7 +141,6 @@ function nav_active(string $page): string {
                 </div>
             </form>
 
-            <!-- Hamburger Button with Perfect Centered Spacing -->
             <button id="hamburgerBtn"
                     class="md:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl hover:bg-slate-800 transition-colors duration-200 focus:outline-none focus:ring-0 gap-[5px]"
                     aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobileMenu">
@@ -131,7 +149,6 @@ function nav_active(string $page): string {
                 <span class="hamburger-bar block w-5 h-0.5 bg-white rounded-full" id="full-bar3"></span>
             </button>
 
-            <!-- DESKTOP NAVIGATION -->
             <nav class="header-nav hidden md:flex items-center gap-1 text-sm font-semibold shrink-0">
                 
                 <a href="<?= $base_url; ?>/index.php" class="px-3 py-2 rounded-lg text-gray-300 hover:text-amber-400 hover:bg-slate-800/50 transition-all duration-200 <?= nav_active('index'); ?>">
@@ -157,13 +174,14 @@ function nav_active(string $page): string {
                                     </a>
                                 </li>
                             <?php endforeach; ?>
+                        <?php else: ?>
+                            <li class="px-4 py-2 text-xs text-gray-400 italic">No categories found</li>
                         <?php endif; ?>
                     </ul>
                 </div>
 
                 <span class="w-px h-5 bg-slate-700 mx-2"></span>
 
-                <!-- ADMIN ROLE SPECIFIC NAVIGATION -->
                 <?php if ($is_admin): ?>
                     <a href="<?= $base_url; ?>/admin/dashboard.php" class="px-3 py-2 rounded-lg text-amber-400 bg-slate-800 border border-amber-500/20 hover:bg-slate-700 transition-all duration-200">
                         <i class="fa-solid fa-gauge mr-1"></i> Dashboard
@@ -171,9 +189,9 @@ function nav_active(string $page): string {
                     
                     <div class="relative cat-dropdown ml-1">
                         <button class="cat-toggle px-3 py-2 rounded-lg text-gray-300 hover:text-amber-400 hover:bg-slate-800/50 transition-all duration-200 flex items-center gap-2 focus:outline-none" type="button">
-                            <span class="w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center text-xs text-slate-900">
-                                <i class="fa-solid fa-user-gear"></i>
-                            </span>
+                            <!-- Admin Profile Navigation Image Fix -->
+                            <img src="<?php echo !empty($_SESSION['user_image']) ? $base_url.'/uploads/profile/'.$_SESSION['user_image'] : 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'; ?>" 
+                                 class="w-8 h-8 rounded-full object-cover border border-amber-500 shadow-sm">
                             <i class="fas fa-chevron-down text-[8px] opacity-60"></i>
                         </button>
                         <ul class="cat-dropdown-menu absolute right-0 mt-1 w-48 bg-white text-slate-800 rounded-xl shadow-xl shadow-slate-900/10 border border-gray-100 z-50 py-1.5 overflow-hidden">
@@ -184,9 +202,7 @@ function nav_active(string $page): string {
                         </ul>
                     </div>
 
-                <!-- CUSTOMER & GUEST ROLE NAVIGATION -->
                 <?php else: ?>
-                    <!-- Changed text to Burmese "စုစုပေါင်း" and "(ကျပ်)" for Desktop View -->
                     <a href="<?= $base_url; ?>/user/cart.php" class="px-3 py-1.5 rounded-lg text-gray-300 hover:text-amber-400 hover:bg-slate-800/50 transition-all duration-200 relative flex items-center gap-3 <?= nav_active('cart'); ?>">
                         <div class="relative">
                             <i class="fa-solid fa-cart-shopping text-xl"></i>
@@ -204,10 +220,9 @@ function nav_active(string $page): string {
                         <a href="<?= $base_url; ?>/user/myorders.php" class="px-3 py-2 rounded-lg text-gray-300 hover:text-amber-400 hover:bg-slate-800/50 transition-all duration-200 <?= nav_active('myorders'); ?>">My Orders</a>
                         
                         <div class="relative cat-dropdown">
-                            <button class="cat-toggle px-3 py-2 rounded-lg text-gray-300 hover:text-amber-400 hover:bg-slate-800/50 transition-all duration-200 flex items-center gap-2 focus:outline-none" type="button">
-                                <span class="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center text-xs text-amber-400">
-                                    <i class="fa-solid fa-user"></i>
-                                </span>
+                            <button class="cat-toggle px-1 py-1 rounded-lg text-gray-300 hover:text-amber-400 hover:bg-slate-800/50 transition-all duration-200 flex items-center gap-1.5 focus:outline-none" type="button">
+                                <img src="<?php echo !empty($_SESSION['user_image']) ? $base_url.'/uploads/profile/'.$_SESSION['user_image'] : 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'; ?>" 
+                                     class="w-8 h-8 rounded-full object-cover border border-amber-500 shadow-sm">
                                 <i class="fas fa-chevron-down text-[8px] opacity-60"></i>
                             </button>
                             <ul class="cat-dropdown-menu absolute right-0 mt-1 w-48 bg-white text-slate-800 rounded-xl shadow-xl shadow-slate-900/10 border border-gray-100 z-50 py-1.5 overflow-hidden">
@@ -225,7 +240,6 @@ function nav_active(string $page): string {
             </nav>
         </div>
 
-        <!-- MOBILE SEARCH BAR (Fixed yellow border issue on focus/hover) -->
         <form action="<?= $base_url; ?>/index.php" method="GET" class="md:hidden mt-3">
             <div class="relative w-full">
                 <input type="text" name="search"
@@ -238,7 +252,6 @@ function nav_active(string $page): string {
             </div>
         </form>
 
-        <!-- MOBILE DROPDOWN MENU -->
         <div id="mobileMenu" class="md:hidden mt-3 border-t border-slate-800 pt-3 pb-2">
             <nav class="header-nav flex flex-col gap-0.5 text-sm font-semibold">
                 
@@ -267,13 +280,14 @@ function nav_active(string $page): string {
                                     </a>
                                 </li>
                             <?php endforeach; ?>
+                        <?php else: ?>
+                            <li class="px-4 py-2 text-xs text-gray-400 italic">No categories found</li>
                         <?php endif; ?>
                     </ul>
                 </div>
 
                 <hr class="border-slate-800 my-1 mx-4">
 
-                <!-- MOBILE: ADMIN ROLE MENU -->
                 <?php if ($is_admin): ?>
                     <a href="<?= $base_url; ?>/admin/dashboard.php" class="flex items-center gap-3 px-4 py-3 mx-4 rounded-xl bg-amber-500 text-slate-900 font-bold justify-center transition-colors duration-200 shadow-sm shadow-amber-500/20">
                         <i class="fa-solid fa-gauge text-xs"></i> Dashboard
@@ -283,9 +297,7 @@ function nav_active(string $page): string {
                         <i class="fa-solid fa-right-from-bracket text-xs w-5 text-center"></i> Admin Logout
                     </a>
 
-                <!-- MOBILE: CUSTOMER ROLE MENU -->
                 <?php else: ?>
-                    <!-- Changed text to Burmese "စုစုပေါင်း" and "(ကျပ်)" for Mobile View -->
                     <a href="<?= $base_url; ?>/user/cart.php" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors duration-200 <?= nav_active('cart'); ?>">
                         <i class="fa-solid fa-cart-shopping text-xs w-5 text-center text-gray-500"></i>
                         <span>စုစုပေါင်း:</span>
@@ -296,8 +308,13 @@ function nav_active(string $page): string {
                         <a href="<?= $base_url; ?>/user/myorders.php" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors duration-200 <?= nav_active('myorders'); ?>">
                             <i class="fa-solid fa-box text-xs w-5 text-center text-gray-500"></i> My Orders
                         </a>
-                        <a href="<?= $base_url; ?>/user/userprofile.php" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors duration-200 <?= nav_active('userprofile'); ?>">
-                            <i class="fa-solid fa-user text-xs w-5 text-center text-gray-500"></i> Profile
+                        <a href="<?= $base_url; ?>/user/userprofile.php" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition-colors duration-200 <?= nav_active('userprofile'); ?> flex items-center justify-between">
+                            <span class="flex items-center gap-3">
+                                <!-- Mobile View Profile Avatar Fixed -->
+                                <img src="<?php echo !empty($_SESSION['user_image']) ? $base_url.'/uploads/profile/'.$_SESSION['user_image'] : 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'; ?>" 
+                                     class="w-6 h-6 rounded-full object-cover border border-amber-500">
+                                Profile
+                            </span>
                         </a>
                         <hr class="border-slate-800 my-1 mx-4">
                         <a href="<?= $base_url; ?>/auth/logout.php" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 text-red-400 hover:text-red-300 transition-colors duration-200">
@@ -329,7 +346,7 @@ function nav_active(string $page): string {
     var bar2 = document.getElementById('bar2');
     var bar3 = document.getElementById('full-bar3');
 
-    /* ---- Hamburger Animation Engine (Transforms seamlessly to 'X') ---- */
+    /* Hamburger Animation Engine */
     if (btn && menu) {
         btn.addEventListener('click', function () {
             var open = menu.classList.toggle('open');
@@ -340,7 +357,7 @@ function nav_active(string $page): string {
         });
     }
 
-    /* ---- Category Dropdown Handlers ---- */
+    /* Category Dropdown Handlers */
     document.querySelectorAll('.cat-toggle').forEach(function (toggle) {
         toggle.addEventListener('click', function (e) {
             e.stopPropagation();
@@ -352,14 +369,14 @@ function nav_active(string $page): string {
         });
     });
 
-    /* ---- Document Overlay Click Closures ---- */
+    /* Document Overlay Click Closures */
     document.addEventListener('click', function (e) {
         document.querySelectorAll('.cat-dropdown.open').forEach(function (dd) {
             if (!dd.contains(e.target)) dd.classList.remove('open');
         });
     });
 
-    /* ---- Display Viewport Recalibration Listeners ---- */
+    /* Display Viewport Recalibration Listeners */
     var resizeTimer;
     window.addEventListener('resize', function () {
         clearTimeout(resizeTimer);
@@ -374,7 +391,7 @@ function nav_active(string $page): string {
         }, 100);
     });
 
-    /* ---- Live Cart Update from API ---- */
+    /* Live Cart Update from API */
     window.refreshCartBadge = function () {
         if (document.getElementById('navCartBadge') === null && document.getElementById('mNavCartCount') === null) {
             return; 
@@ -396,7 +413,6 @@ function nav_active(string $page): string {
 
                 var mCount = document.getElementById('mNavCartCount');
                 var mTotal = document.getElementById('mNavCartTotal');
-                // Updated terminology in JavaScript API response mapping
                 if (mCount) mCount.textContent = count + " အုပ်";
                 if (mTotal) mTotal.textContent = total.toLocaleString() + " (ကျပ်)";
             })

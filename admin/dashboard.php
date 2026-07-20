@@ -11,54 +11,53 @@ if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     exit();
 }
 
+// Sidebar Active Link 
+$current_page = 'dashboard';
+
 // Fetch Admin Details from Session
 $admin_name = $_SESSION['user_name'] ?? 'Admin User';
 $admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
 $admin_initial = strtoupper(substr($admin_name, 0, 1));
 
-// --- 1. Dynamic Analytics Queries ---
+// Sync Profile Image from Database if not available in current session
+if (!isset($_SESSION['user_image']) && isset($conn)) {
+    $uid = $_SESSION['user_id'];
+    $u_query = mysqli_query($conn, "SELECT profile_image FROM Users WHERE id = '$uid'");
+    if ($u_query && $u_row = mysqli_fetch_assoc($u_query)) {
+        $_SESSION['user_image'] = $u_row['profile_image'];
+    }
+}
 
-// Total Revenue
+// --- 1. Dynamic Analytics Queries ---
 $rev_query = mysqli_query($conn, "SELECT COALESCE(SUM(amount), 0) as total FROM Payment WHERE status IN ('pending', 'paid')");
 $total_revenue = mysqli_fetch_assoc($rev_query)['total'];
 
-// Total Quantity of All Books in Stock (Database Total Stock Sum)
 $books_query = mysqli_query($conn, "SELECT COALESCE(SUM(stock), 0) as total FROM Books");
 $total_books = mysqli_fetch_assoc($books_query)['total'];
 
-// Total Categories
 $cat_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Categories");
 $total_categories = mysqli_fetch_assoc($cat_query)['total'];
 
-// --- Split Customers into Two Operational Groups ---
-// 1. Customers who have actually purchased (at least one order in Orders table)
 $purchased_query = mysqli_query($conn, "SELECT COUNT(DISTINCT user_id) as total FROM Orders");
 $purchased_customers = mysqli_fetch_assoc($purchased_query)['total'];
 
-// 2. Registered viewers (role 'customer' but no orders yet in Orders table)
 $viewers_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Users WHERE role = 'customer' AND id NOT IN (SELECT DISTINCT user_id FROM Orders)");
 $registered_viewers = mysqli_fetch_assoc($viewers_query)['total'];
 
-// Total Registered Customers (Purchased Customers + Registered Viewers)
 $total_customers = $purchased_customers + $registered_viewers;
 
-// Total Orders Placed
 $order_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Orders");
 $total_orders = mysqli_fetch_assoc($order_query)['total'];
 
-// Total Awaiting Deliveries
 $del_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Delivery WHERE delivery_status = 'pending'");
 $pending_deliveries = mysqli_fetch_assoc($del_query)['total'];
 
-// Fetch Books with Low Stock Levels (Less than 3 copies available)
 $low_stock_query = mysqli_query($conn, "SELECT id, title, stock FROM Books WHERE stock < 3 ORDER BY stock ASC");
 $low_stock_count = mysqli_num_rows($low_stock_query);
 
-// Fetch Pending Payments (New Bank Transfers) for the Notification Dropdown
 $pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
 $pending_payments_count = mysqli_num_rows($pending_payments_query);
 
-// Recent Transactions Queue (Latest 5 orders)
 $recent_orders_query = mysqli_query($conn, "
     SELECT o.*, u.name as customer_name 
     FROM Orders o 
@@ -83,53 +82,8 @@ $recent_orders_query = mysqli_query($conn, "
 
 <div class="flex h-screen overflow-hidden">
     
-    <!-- SIDEBAR CONTAINER -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-400 flex flex-col justify-between transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 border-r border-slate-800 shrink-0">
-        <div class="p-6 overflow-y-auto no-scrollbar flex-1">
-            <div class="flex items-center justify-between mb-8 px-2">
-                <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
-                        <i class="fa-solid fa-book-open text-sm"></i>
-                    </div>
-                    <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">BookShop</span>
-                </div>
-                <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-white cursor-pointer">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-            
-            <nav class="space-y-1.5">
-                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 bg-indigo-600 text-white rounded-xl font-medium shadow-sm shadow-indigo-600/10">
-                    <i class="fa-solid fa-chart-pie w-5 text-indigo-200"></i><span>Dashboard</span>
-                </a>
-                <a href="books.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-book w-5"></i><span>Manage Books</span>
-                </a>
-                <a href="categories.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-tags w-5"></i><span>Categories</span>
-                </a>
-                <a href="orders.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-cart-shopping w-5"></i><span>Orders</span>
-                </a>
-                <a href="manage_payment.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-credit-card w-5"></i><span>Payments</span>
-                </a>
-                <a href="delivery.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-truck w-5"></i><span>Deliveries</span>
-                </a>
-                <a href="customers.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-users w-5"></i><span>Customers</span>
-                </a>
-            </nav>
-        </div>
-        
-        <!-- Premium Red Sign Out Button in Sidebar -->
-        <div class="p-4 border-t border-slate-800 bg-slate-950/30">
-            <a href="../auth/logout.php" class="flex items-center justify-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-rose-600/20 group">
-                <i class="fa-solid fa-right-from-bracket group-hover:transform group-hover:translate-x-0.5 transition"></i><span>Sign Out</span>
-            </a>
-        </div>
-    </aside>
+    <!-- ================= DYNAMIC SIDEBAR INCLUDE ================= -->
+    <?php include '../auth/sidebar.php'; ?>
 
     <div class="flex-1 flex flex-col overflow-hidden w-full">
         
@@ -139,7 +93,6 @@ $recent_orders_query = mysqli_query($conn, "
                 <button onclick="toggleSidebar()" class="p-2 rounded-xl text-slate-600 hover:bg-slate-50 md:hidden transition cursor-pointer">
                     <i class="fa-solid fa-bars text-lg"></i>
                 </button>
-                <!-- Added "Dashboard" header in navigation bar -->
                 <h1 class="text-lg font-bold text-slate-800 md:text-xl">Dashboard</h1>
             </div>
 
@@ -161,7 +114,7 @@ $recent_orders_query = mysqli_query($conn, "
                                 <?php while($payment = mysqli_fetch_assoc($pending_payments_query)): ?>
                                 <a href="manage_payment.php" class="block p-3 hover:bg-slate-50 transition">
                                     <p class="text-xs font-bold text-indigo-600 flex items-center"><i class="fa-solid fa-wallet mr-1.5"></i> New Bank Transfer Pending</p>
-                                    <p class="text-xxs text-slate-500 mt-0.5">Amount: <?php echo number_format($payment['amount']); ?> MMK awaiting approval.</p>
+                                    <p class="text-xxs text-slate-500 mt-0.5">Amount: <?php echo number_format($payment['amount']); ?> ကျပ် awaiting approval.</p>
                                 </a>
                                 <?php endwhile; ?>
                             <?php endif; ?>
@@ -182,8 +135,11 @@ $recent_orders_query = mysqli_query($conn, "
                 
                 <!-- Admin Profile Menu -->
                 <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
-                        <i class="fa-solid fa-user text-sm"></i>
+                    <!-- Updated Profile Button with Dynamic Image -->
+                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-8 h-8 rounded-full border border-slate-200 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer overflow-hidden">
+                        <img src="<?php echo !empty($_SESSION['user_image']) ? '/onlinebookshop/uploads/profile/'.$_SESSION['user_image'] : 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png'; ?>" 
+                             class="w-full h-full object-cover" 
+                             alt="Admin Profile">
                     </button>
 
                     <!-- Admin Profile Dropdown Menu -->
@@ -294,7 +250,7 @@ $recent_orders_query = mysqli_query($conn, "
                     </div>
                 </div>
 
-                <!-- 6. Customers Card (Updated with requested Myanmar translation and responsive layout) -->
+                <!-- 6. Customers Card -->
                 <div class="bg-white p-6 rounded-2xl border border-slate-200/60 flex flex-col justify-between shadow-sm hover:border-slate-300 transition group space-y-4">
                     <div class="flex items-center justify-between">
                         <div class="space-y-1">
@@ -306,7 +262,6 @@ $recent_orders_query = mysqli_query($conn, "
                         </div>
                     </div>
                     
-                    <!-- Sub Breakdown Layout for Customers -->
                     <div class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-xs">
                         <div class="bg-emerald-50/60 p-2 rounded-xl border border-emerald-100">
                             <p class="text-slate-500 font-medium">စာအုပ်ဝယ်ယူသူ</p>
@@ -398,13 +353,11 @@ $recent_orders_query = mysqli_query($conn, "
 </div>
 
 <script>
-    // Sidebar Toggle Logic
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         sidebar.classList.toggle('-translate-x-full');
     }
 
-    // Notification Dropdown Toggle Logic
     function toggleNotificationDropdown(e) {
         e.stopPropagation();
         const notiDropdown = document.getElementById('notiDropdown');
@@ -414,7 +367,6 @@ $recent_orders_query = mysqli_query($conn, "
         profileDropdown.classList.add('hidden'); 
     }
 
-    // Profile Dropdown Toggle Logic
     function toggleProfileDropdown(e) {
         e.stopPropagation();
         const profileDropdown = document.getElementById('profileDropdown');
@@ -424,7 +376,6 @@ $recent_orders_query = mysqli_query($conn, "
         notiDropdown.classList.add('hidden'); 
     }
 
-    // Global click listener to close dropdowns when clicking outside
     window.addEventListener('click', function(e) {
         const notiDropdown = document.getElementById('notiDropdown');
         const profileDropdown = document.getElementById('profileDropdown');

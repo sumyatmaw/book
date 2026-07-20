@@ -61,9 +61,9 @@ if ($cat_result) {
                 </h1>
                 <p class="text-xs text-gray-500 mt-1">Your order history and tracking</p>
             </div>
-            <a href="<?= $base_url; ?>/books.php" class="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition self-start sm:self-center">
+            <!-- <a href="<?= $base_url; ?>/books.php" class="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition self-start sm:self-center">
                 <i class="fa-solid fa-shopping-bag mr-1"></i> Browse Books
-            </a>
+            </a> -->
         </div>
 
         <?php if ($result && $result->num_rows > 0): ?>
@@ -122,7 +122,7 @@ if ($cat_result) {
                                 <i class="fa-solid <?= $status_icon; ?> text-[10px]"></i> <?= $display_status; ?>
                             </span>
                             <span class="text-sm font-black text-blue-600">
-                                <?= number_format($row['total_amount']); ?> MMK
+                                <?= number_format($row['total_amount']); ?> ကျပ်
                             </span>
                         </div>
                     </div>
@@ -200,11 +200,11 @@ if ($cat_result) {
                     <div class="px-5 sm:px-6 py-4 border-t border-gray-100 bg-slate-50/50 flex items-center justify-between">
                         <div>
                             <?php if ($display_status === 'Pending' && $payment_status !== 'rejected'): ?>
-                                <a href="payment.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1.5 bg-blue-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-sm">
+                                <!-- <a href="payment_submit.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1.5 bg-blue-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-sm">
                                     <i class="fa-solid fa-credit-card text-[10px]"></i> Pay Now
-                                </a>
+                                </a> -->
                             <?php elseif ($display_status === 'Rejected'): ?>
-                                <a href="payment.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1.5 bg-amber-500 text-slate-900 text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-amber-400 transition shadow-sm">
+                                <a href="payment_submit.php?order=<?= $row['id']; ?>" class="inline-flex items-center gap-1.5 bg-amber-500 text-slate-900 text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-amber-400 transition shadow-sm">
                                     <i class="fa-solid fa-redo text-[10px]"></i> Retry Payment
                                 </a>
                             <?php else: ?>
