@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         header('Location: ../admin/dashboard.php');
                         exit();
                     } else {
-                        header('Location: ../user/userdashboard.php');
+                        header('Location: ../index.php');
                         exit();
                     }
                 }
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .remember-check { accent-color: #f59e0b; }
     </style>
 </head>
-<body class="bg-[#fdfbf7] min-h-screen flex items-center justify-center font-sans p-4">
+<body class="bg-slate-200  min-h-screen flex items-center justify-center font-sans p-4">
 
 <main class="login-card bg-white rounded-3xl shadow-[0_25px_60px_rgba(180,130,50,0.12)] overflow-hidden max-w-4xl w-full grid md:grid-cols-2 border border-[#eae3d2]">
 
@@ -302,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     /* Live validation on blur */
-    emailIn.addEventListener('blur', function () {
+    emailIn.addEventListener('input', function () {
         if (emailIn.value.trim() === '') {
             showError(emailErr, 'Email is required.');
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn.value.trim())) {
@@ -312,7 +312,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     });
 
-    passIn.addEventListener('blur', function () {
+    passIn.addEventListener('input', function () {
         if (passIn.value === '') {
             showError(passErr, 'Password is required.');
         } else if (passIn.value.length < 6) {

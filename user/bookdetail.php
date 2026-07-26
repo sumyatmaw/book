@@ -3,7 +3,7 @@ session_start();
 require_once "../config/db.php";
 
 $is_logged_in = isset($_SESSION['user_id']);
-$is_customer = $is_logged_in && $_SESSION['user_role'] === 'customer';
+$is_customer = $is_logged_in && isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'customer';
 
 // Validate Book ID
 if (!isset($_GET['id'])) {
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_rating'])) {
         }
 
         if (empty($rating_err)) {
-            // Insert rating into database (handles NULL values for guest user_id safely)
+            // Insert rating into database
             $stmt = $conn->prepare("INSERT INTO Ratings (user_id, book_id, rating, comment, created_at) VALUES (?, ?, ?, ?, NOW())");
             $stmt->bind_param("iiis", $user_id, $id, $rating_val, $comment);
             if ($stmt->execute()) {
@@ -112,7 +112,7 @@ if ($is_logged_in) {
     $chk->close();
 }
 
-// Fetch Book Details
+// Fetch Book Details from Database
 $stmt = $conn->prepare("SELECT Books.*, Categories.category_name FROM Books LEFT JOIN Categories ON Books.category_id = Categories.id WHERE Books.id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
@@ -125,6 +125,29 @@ if ($result->num_rows == 0) {
 
 $book = $result->fetch_assoc();
 $stmt->close();
+
+// Calculate total quantity of this book already present in user's cart (DB or Session)
+$qty_in_cart = 0;
+if ($is_logged_in) {
+    $c_stmt = $conn->prepare("SELECT SUM(quantity) as cart_qty FROM Cart_item WHERE user_id = ? AND book_id = ?");
+    $c_stmt->bind_param("ii", $_SESSION['user_id'], $id);
+    $c_stmt->execute();
+    $c_res = $c_stmt->get_result()->fetch_assoc();
+    $qty_in_cart = $c_res['cart_qty'] ? intval($c_res['cart_qty']) : 0;
+    $c_stmt->close();
+} else {
+    if (isset($_SESSION['guest_cart'])) {
+        foreach ($_SESSION['guest_cart'] as $g_item) {
+            if (isset($g_item['book_id']) && intval($g_item['book_id']) === $id) {
+                $qty_in_cart += intval($g_item['quantity']);
+            }
+        }
+    }
+}
+
+// Compute real-time available stock for purchase
+$total_physical_stock = intval($book['stock']);
+$available_stock = max(0, $total_physical_stock - $qty_in_cart);
 
 // Fetch All Reviews for this specific book
 $review_query = "SELECT Ratings.*, Users.name FROM Ratings LEFT JOIN Users ON Ratings.user_id = Users.id WHERE Ratings.book_id = ? ORDER BY Ratings.id DESC";
@@ -154,6 +177,7 @@ $review_stmt->close();
 
     <?php include '../auth/header.php'; ?>
 
+    <!-- Stock Alert Toast Notification -->
     <div id="stockToast" class="fixed top-5 right-5 z-50 transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none max-w-sm w-[90%] sm:w-full mx-auto sm:mx-0">
         <div class="bg-white border-l-4 border-amber-500 rounded-xl shadow-xl p-4 flex items-start gap-3 border border-slate-100">
             <div class="bg-amber-50 p-2 rounded-lg text-amber-600 flex-shrink-0">
@@ -212,15 +236,14 @@ $review_stmt->close();
 
                     <div class="mb-6">
                         <?php 
-                        $stock = intval($book['stock']);
-                        // Check if book stock is greater than 0, then display In Stock
-                        if ($stock > 0): 
-                            $stock_color_class = ($stock < 4) ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700';
-                            $dot_color_class = ($stock < 4) ? 'bg-rose-500' : 'bg-emerald-500';
+                        // Check if real-time available stock is greater than 0
+                        if ($available_stock > 0): 
+                            $stock_color_class = ($available_stock < 4) ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700';
+                            $dot_color_class = ($available_stock < 4) ? 'bg-rose-500' : 'bg-emerald-500';
                         ?>
                             <span class="inline-flex items-center gap-1.5 px-3 py-1 <?= $stock_color_class; ?> text-xs font-bold rounded-full">
-                                <span class="w-1.5 h-1.5 rounded-full <?= $dot_color_class; ?> <?= ($stock < 4) ? '' : 'animate-pulse'; ?>"></span>
-                                <span id="currentStockDisplay"><?= $stock; ?></span> အုပ်
+                                <span class="w-1.5 h-1.5 rounded-full <?= $dot_color_class; ?> <?= ($available_stock < 4) ? '' : 'animate-pulse'; ?>"></span>
+                                <span id="currentStockDisplay"><?= $available_stock; ?></span> အုပ်
                             </span>
                         <?php else: ?>
                             <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-700 text-xs font-bold rounded-full">
@@ -239,7 +262,7 @@ $review_stmt->close();
                 </div>
 
                 <div class="mt-8 pt-6 border-t border-slate-100">
-                    <?php if ($book['stock'] > 0): ?>
+                    <?php if ($available_stock > 0): ?>
                     <form action="addtocart.php" method="POST" id="addToCartForm" class="flex flex-col sm:flex-row items-stretch sm:items-end gap-4" novalidate>
                         <input type="hidden" name="book_id" value="<?= $book['id']; ?>">
                         
@@ -256,7 +279,7 @@ $review_stmt->close();
                                 <button type="button" onclick="changeQty(-1)" class="w-12 sm:w-10 h-full flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition font-bold select-none cursor-pointer">
                                     <i class="fa-solid fa-minus text-xs"></i>
                                 </button>
-                                <input type="number" name="quantity" id="quantityInput" value="1" min="1" max="<?= intval($book['stock']); ?>"
+                                <input type="number" name="quantity" id="quantityInput" value="1" min="1" max="<?= $available_stock; ?>"
                                        class="flex-1 bg-transparent text-center text-sm font-bold text-slate-800 focus:outline-none h-full w-12">
                                 <button type="button" onclick="changeQty(1)" class="w-12 sm:w-10 h-full flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition font-bold select-none cursor-pointer">
                                     <i class="fa-solid fa-plus text-xs"></i>
@@ -265,7 +288,7 @@ $review_stmt->close();
                         </div>
                         
                         <button type="submit"
-                                class="flex-1 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3.5 rounded-xl font-bold text-sm shadow-sm transition duration-150 flex items-center justify-center gap-2 h-[46px]">
+                                class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3.5 rounded-xl font-bold text-sm shadow-sm transition duration-150 flex items-center justify-center gap-2 h-[46px]">
                             <i class="fa-solid fa-bag-shopping text-sm"></i> Add to Cart
                         </button>
                     </form>
@@ -446,6 +469,7 @@ $review_stmt->close();
     <script>
     let stockAlertTimeout;
 
+    // Dynamically adjust purchase quantity in detail view
     function changeQty(amount) {
         const qtyInput = document.getElementById('quantityInput');
         const alertBox = document.getElementById('inlineStockAlert');
@@ -455,7 +479,7 @@ $review_stmt->close();
             let currentVal = parseInt(qtyInput.value) || 1;
             let newVal = currentVal + amount;
             let min = parseInt(qtyInput.getAttribute('min')) || 1;
-            let max = parseInt(qtyInput.getAttribute('max')) || <?= intval($book['stock']); ?>;
+            let max = parseInt(qtyInput.getAttribute('max')) || <?= $available_stock; ?>;
             
             if (newVal >= min && newVal <= max) {
                 qtyInput.value = newVal;
@@ -473,8 +497,9 @@ $review_stmt->close();
         }
     }
 
+    // Input validation for quantity counter
     document.getElementById('quantityInput')?.addEventListener('input', function() {
-        const max = parseInt(this.getAttribute('max')) || <?= intval($book['stock']); ?>;
+        const max = parseInt(this.getAttribute('max')) || <?= $available_stock; ?>;
         const alertBox = document.getElementById('inlineStockAlert');
         const alertCount = document.getElementById('alertStockCount');
         let currentVal = parseInt(this.value) || 1;
@@ -494,6 +519,7 @@ $review_stmt->close();
         }
     });
 
+    // Display notification toast message
     function showToast(message) {
         const toast = document.getElementById('stockToast');
         document.getElementById('stockToastMsg').innerText = message;
@@ -502,6 +528,7 @@ $review_stmt->close();
         setTimeout(dismissToast, 4000);
     }
 
+    // Dismiss notification toast message
     function dismissToast() {
         const toast = document.getElementById('stockToast');
         if(toast) {
@@ -516,7 +543,7 @@ $review_stmt->close();
             addToCartForm.addEventListener('submit', function(e) {
                 const qtyInput = document.getElementById('quantityInput');
                 const requestedQty = parseInt(qtyInput.value) || 0;
-                const maxAvailableStock = <?= intval($book['stock']); ?>;
+                const maxAvailableStock = <?= $available_stock; ?>;
 
                 if (requestedQty > maxAvailableStock) {
                     e.preventDefault(); 
@@ -528,6 +555,7 @@ $review_stmt->close();
             });
         }
         
+        // Setup rating star interaction logic
         const stars = document.querySelectorAll('#ratingStars i');
         const ratingInput = document.getElementById('ratingValue');
         let currentSelectedRating = 0;

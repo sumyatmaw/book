@@ -72,7 +72,7 @@ $is_success = false; // Flag to display the embedded success state layout instea
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tx_ref = trim($_POST['transaction_ref'] ?? '');
     
-    // CHANGED: Redirect target directory straight to the project assets folder where files are expected
+    // Redirect target directory straight to the project assets folder
     $target_dir = "../assets/";
     if (!is_dir($target_dir)) {
         mkdir($target_dir, 0777, true);
@@ -85,8 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
     $uploadOk = 1;
 
-    if (empty($tx_ref) || empty($_FILES["payment_slip"]["name"])) {
-        $error = "All fields are required.";
+    if (empty($_FILES["payment_slip"]["name"])) {
+        $error = "Payment slip image is required.";
         $uploadOk = 0;
     }
 
@@ -97,14 +97,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Allow certain distinct image asset formats
-    if($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg") {
+    if(!empty($_FILES["payment_slip"]["name"]) && $imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg") {
         $error = "Sorry, only JPG, JPEG, & PNG files are allowed.";
         $uploadOk = 0;
     }
 
     if ($uploadOk == 1) {
         if (move_uploaded_file($_FILES["payment_slip"]["tmp_name"], $target_file)) {
-            // CHANGED: Save only the dynamic pure filename string into database to sync properly with Admin panel queries
+            // Save only the dynamic pure filename string into database to sync properly with Admin panel queries
             $db_file_path = $generated_filename;
             $update_stmt = $conn->prepare("UPDATE payment SET transaction_ref = ?, payment_slip = ?, status = 'pending' WHERE order_id = ?");
             $update_stmt->bind_param("ssi", $tx_ref, $db_file_path, $order_id);
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ?>
 
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-50">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -136,12 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
-<body class="text-slate-900 antialiased min-h-screen flex flex-col justify-between">
+<body class="text-slate-900 antialiased min-h-screen flex flex-col justify-between bg-slate-50">
 
     <?php include "../auth/header.php"; ?>
 
     <main class="flex-grow max-w-2xl w-full mx-auto px-4 py-6 md:py-10">
-        <div class="bg-white rounded-3xl p-6 sm:p-10 shadow-sm border border-slate-100 space-y-8">
+        <div class="bg-gray-300 rounded-3xl p-6 sm:p-10 shadow-sm space-y-8">
             
             <?php if ($is_success): ?>
                 <!-- ================= SUCCESS CARD STATE LAYER ================= -->
@@ -227,33 +227,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <!-- Form Submissions -->
                 <form action="" method="POST" enctype="multipart/form-data" class="space-y-6">
-                    <!-- Step 1: File Upload -->
+                    <!-- Step 1: File Upload with Small Thumbnail Preview -->
                     <div class="space-y-2">
-                        <label class="block text-sm font-bold text-slate-800">1. Upload Payment Slip / Screenshot <span class="text-rose-500">*</span></label>
-                        <div class="flex items-center w-full border border-slate-200 rounded-xl p-2 bg-slate-50/50">
-                            <input type="file" name="payment_slip" id="file-upload" required accept="image/*" class="block w-full text-xs md:text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 file:cursor-pointer cursor-pointer"/>
-                        </div>
-                        <p class="text-[11px] text-slate-400">JPG, JPEG, or PNG format only (Maximum size: 2MB).</p>
-                    </div>
+                        <label class="block text-sm font-bold text-slate-800">Upload Payment Slip / Screenshot <span class="text-rose-500">*</span></label>
+                        
+                        <div class="flex items-center gap-3 w-full border border-slate-200 rounded-xl p-2 bg-slate-50/50">
+                            <!-- Custom File Button Box -->
+                            <label for="file-upload" class="bg-white border border-slate-300 hover:border-indigo-500 hover:text-indigo-600 text-slate-700 font-medium text-xs md:text-sm px-4 py-2.5 rounded-lg cursor-pointer transition shrink-0 shadow-sm flex items-center gap-2">
+                                <i class="fa-solid fa-upload"></i>
+                                <span>Choose File</span>
+                            </label>
 
-                    <!-- Step 2: Transaction Reference -->
-                    <div class="space-y-2">
-                        <label class="block text-sm font-bold text-slate-800">2. Transaction Reference ID <span class="text-rose-500">*</span></label>
-                        <div class="relative">
-                            <input type="text" name="transaction_ref" required placeholder="EG. 20260706XXXX" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition bg-slate-50/50 text-slate-800 uppercase tracking-wide">
+                            <!-- Hidden Actual File Input -->
+                            <input type="file" name="payment_slip" id="file-upload" required accept="image/*" onchange="previewSmallImage(event)" class="hidden"/>
+
+                            <!-- Small Thumbnail Display Box -->
+                            <div id="small-preview-container" class="hidden items-center gap-2 overflow-hidden">
+                                <img id="small-preview-img" src="#" alt="Slip Thumbnail" class="w-12 h-12 object-cover rounded-lg border border-slate-300 shadow-sm shrink-0">
+                                <button type="button" onclick="removeSmallImage()" class="text-slate-400 hover:text-rose-500 text-xs transition p-1" title="Remove image">
+                                    <!-- <i class="fa-solid fa-xmark"></i> -->
+                                </button>
+                            </div>
                         </div>
-                        <p class="text-[11px] text-slate-400">Enter the reference/ID from your payment confirmation.</p>
+
+                        <!-- <p class="text-[11px] text-slate-400">JPG, JPEG, or PNG format only (Maximum size: 2MB).</p> -->
                     </div>
 
                     <!-- Submit Button -->
-                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 px-4 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.99] cursor-pointer text-center block text-sm">
+                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3.5 px-4 rounded-xl transition shadow-lg active:scale-[0.99] cursor-pointer text-center block text-sm">
                         Submit Payment Slip
                     </button>
                 </form>
 
                 <!-- Back navigation link -->
                 <div class="text-center pt-2 border-t border-slate-100">
-                    <a href="checkout.php" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-indigo-600 transition-colors">
+                    <a href="checkout.php" class="inline-flex items-center gap-2 text-xs font-semibold text-gray-700 hover:text-gray-900 transition-colors">
                         Back to Checkout
                     </a>
                 </div>
@@ -264,8 +272,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <?php include "../auth/footer.php"; ?>
 
-    <!-- Copy to Clipboard Functional Script -->
+    <!-- Interactive Scripts -->
     <script>
+    // Copy account number to clipboard
     function copyNumber() {
         var numText = document.getElementById("accountNumber").innerText;
         navigator.clipboard.writeText(numText).then(function() {
@@ -273,6 +282,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }, function(err) {
             console.error('Could not copy text: ', err);
         });
+    }
+
+    // Render small thumbnail preview next to Choose File button
+    function previewSmallImage(event) {
+        const input = event.target;
+        const previewContainer = document.getElementById('small-preview-container');
+        const previewImage = document.getElementById('small-preview-img');
+
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                previewContainer.classList.remove('hidden');
+                previewContainer.classList.add('flex');
+            }
+
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    // Remove selected image preview
+    function removeSmallImage() {
+        const input = document.getElementById('file-upload');
+        const previewContainer = document.getElementById('small-preview-container');
+        const previewImage = document.getElementById('small-preview-img');
+
+        input.value = '';
+        previewImage.src = '#';
+        previewContainer.classList.add('hidden');
+        previewContainer.classList.remove('flex');
     }
     </script>
 </body>

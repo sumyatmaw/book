@@ -2,7 +2,7 @@
 session_start();
 require_once '../config/db.php';
 
-// Admin login check
+// Check admin authentication
 if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
     header("Location: ../auth/login.php");
     exit();
@@ -13,462 +13,514 @@ $error = "";
 $admin_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 1;
 $admin_name = $_SESSION['user_name'] ?? 'Admin User';
 $admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
+$admin_initial = strtoupper(substr($admin_name, 0, 1));
 
-// Fetch current admin profile image from session or database (Default: placeholder)
-$admin_image = $_SESSION['user_image'] ?? ''; 
-if (empty($admin_image)) {
-    // Optional fallback: Fetch from Users table if you store it there
-    $admin_query = mysqli_query($conn, "SELECT image FROM Users WHERE id = $admin_id");
-    if ($admin_query && mysqli_num_rows($admin_query) > 0) {
-        $admin_row = mysqli_fetch_assoc($admin_query);
-        $admin_image = $admin_row['image'] ?? '';
+// Fetch profile picture from database if session variable is missing
+if (!isset($_SESSION['user_image']) && isset($conn)) {
+    $u_query = mysqli_query($conn, "SELECT profile_image FROM Users WHERE id = '$admin_id'");
+    if ($u_query && $u_row = mysqli_fetch_assoc($u_query)) {
+        $_SESSION['user_image'] = $u_row['profile_image'];
     }
 }
-// Set standard folder path for profile images
-$profile_path = !empty($admin_image) ? "../uploads/profile/" . $admin_image : "";
 
-// Handle Approve/Reject actions
+// Upload directory for QR Code images
+$upload_dir = "../uploads/qr_codes/";
+if (!file_exists($upload_dir)) {
+    mkdir($upload_dir, 0777, true);
+}
+
+// Process form submissions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['approve_payment'])) {
-        $payment_id = intval($_POST['payment_id']);
-        $stmt = $conn->prepare("UPDATE Payment SET status = 'paid' WHERE id = ?");
-        $stmt->bind_param("i", $payment_id);
-        if ($stmt->execute()) {
-            // Get payment and order info
-            $pay_info_stmt = $conn->prepare("SELECT Payment.order_id, Orders.user_id FROM Payment JOIN Orders ON Payment.order_id = Orders.id WHERE Payment.id = ?");
-            $pay_info_stmt->bind_param("i", $payment_id);
-            $pay_info_stmt->execute();
-            $pay_info = $pay_info_stmt->get_result()->fetch_assoc();
-            $pay_info_stmt->close();
+    
+    // Add new payment method
+    if (isset($_POST['add_payment_method'])) {
+        $method_name    = trim($_POST['method_name']);
+        $account_number = trim($_POST['account_number']);
+        $account_holder = trim($_POST['account_holder']);
+        $description    = trim($_POST['description']);
+        $is_active      = isset($_POST['is_active']) ? 1 : 0;
+        $qr_code_file   = "";
 
-            if ($pay_info) {
-                // Update order status to completed
-                $order_upd = $conn->prepare("UPDATE Orders SET status = 'completed' WHERE id = ?");
-                $order_upd->bind_param("i", $pay_info['order_id']);
-                $order_upd->execute();
-                $order_upd->close();
+        // Process QR code image upload
+        if (isset($_FILES['qr_code']) && $_FILES['qr_code']['error'] === UPLOAD_ERR_OK) {
+            $file_ext = strtolower(pathinfo($_FILES['qr_code']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'webp'];
 
-                // Auto-create Delivery record if it doesn't exist
-                $del_check = $conn->prepare("SELECT id FROM Delivery WHERE payment_id = ? LIMIT 1");
-                $del_check->bind_param("i", $payment_id);
-                $del_check->execute();
-                $del_exists = $del_check->get_result()->num_rows > 0;
-                $del_check->close();
+            if (in_array($file_ext, $allowed)) {
+                $qr_code_file = strtolower(str_replace(' ', '_', $method_name)) . '_qr_' . time() . '.' . $file_ext;
+                move_uploaded_file($_FILES['qr_code']['tmp_name'], $upload_dir . $qr_code_file);
+            }
+        }
 
-                if (!$del_exists) {
-                    // Get customer info for delivery
-                    $user_stmt = $conn->prepare("SELECT name, phone, address FROM Users WHERE id = ?");
-                    $user_stmt->bind_param("i", $pay_info['user_id']);
-                    $user_stmt->execute();
-                    $user_data = $user_stmt->get_result()->fetch_assoc();
-                    $user_stmt->close();
+        if (empty($method_name) || empty($account_number) || empty($account_holder)) {
+            $error = "Method Name, Account Number, and Account Holder are required!";
+        } else {
+            $stmt = $conn->prepare("INSERT INTO payment_method (method_name, account_number, account_holder, is_active, description, qr_code) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("sssiss", $method_name, $account_number, $account_holder, $is_active, $description, $qr_code_file);
 
-                    if ($user_data) {
-                        $current_time = date('Y-m-d H:i:s');
-                        $del_ins = $conn->prepare("INSERT INTO Delivery(payment_id, receiver_name, receiver_phone, address_details, city, delivery_status, delivery_cost, shipped_at) VALUES(?, ?, ?, ?, ?, 'pending', 0.00, ?)");
-                        $city = '';
-                        $del_ins->bind_param("isssss", $payment_id, $user_data['name'], $user_data['phone'], $user_data['address'], $city, $current_time);
-                        $del_ins->execute();
-                        $del_ins->close();
-                    }
+            if ($stmt->execute()) {
+                $message = "Payment method added successfully!";
+            } else {
+                $error = "Failed to add payment method!";
+            }
+            $stmt->close();
+            header("Location: manage_payment.php");
+            exit();
+        }
+    }
+
+    // Update existing payment method
+    if (isset($_POST['update_payment_method'])) {
+        $idToUpdate     = (int)$_POST['method_id'];
+        $method_name    = trim($_POST['method_name']);
+        $account_number = trim($_POST['account_number']);
+        $account_holder = trim($_POST['account_holder']);
+        $description    = trim($_POST['description']);
+        $is_active      = isset($_POST['is_active']) ? 1 : 0;
+        $old_qr_code    = $_POST['old_qr_code'] ?? '';
+        $qr_code_file   = $old_qr_code;
+
+        // Process QR code image update
+        if (isset($_FILES['qr_code']) && $_FILES['qr_code']['error'] === UPLOAD_ERR_OK) {
+            $file_ext = strtolower(pathinfo($_FILES['qr_code']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+            if (in_array($file_ext, $allowed)) {
+                $qr_code_file = strtolower(str_replace(' ', '_', $method_name)) . '_qr_' . time() . '.' . $file_ext;
+                move_uploaded_file($_FILES['qr_code']['tmp_name'], $upload_dir . $qr_code_file);
+
+                // Unlink old QR code file
+                if (!empty($old_qr_code) && file_exists($upload_dir . $old_qr_code)) {
+                    unlink($upload_dir . $old_qr_code);
                 }
             }
-            $message = "Payment approved successfully! Order marked as completed.";
-        } else {
-            $error = "Failed to approve payment.";
         }
-        $stmt->close();
-        header("Location: manage_payment.php");
-        exit();
+
+        if (empty($method_name) || empty($account_number) || empty($account_holder)) {
+            $error = "Method Name, Account Number, and Account Holder are required!";
+        } else {
+            $update = $conn->prepare("UPDATE payment_method SET method_name = ?, account_number = ?, account_holder = ?, is_active = ?, description = ?, qr_code = ? WHERE id = ?");
+            $update->bind_param("sssissi", $method_name, $account_number, $account_holder, $is_active, $description, $qr_code_file, $idToUpdate);
+
+            if ($update->execute()) {
+                header("Location: manage_payment.php");
+                exit();
+            } else {
+                $error = "Failed to update payment method!";
+            }
+            $update->close();
+        }
     }
 
-    if (isset($_POST['reject_payment'])) {
-        $payment_id = intval($_POST['payment_id']);
-        $stmt = $conn->prepare("UPDATE Payment SET status = 'rejected' WHERE id = ?");
-        $stmt->bind_param("i", $payment_id);
-        if ($stmt->execute()) {
-            $message = "Payment rejected. Order remains pending.";
-        } else {
-            $error = "Failed to reject payment.";
+    // Delete payment method
+    if (isset($_POST['delete_payment_method'])) {
+        $idToDelete = (int)$_POST['method_id'];
+
+        // Retrieve QR code path prior to deletion
+        $stmt_img = $conn->prepare("SELECT qr_code FROM payment_method WHERE id = ?");
+        $stmt_img->bind_param("i", $idToDelete);
+        $stmt_img->execute();
+        $res_img = $stmt_img->get_result();
+        if ($row = $res_img->fetch_assoc()) {
+            if (!empty($row['qr_code']) && file_exists($upload_dir . $row['qr_code'])) {
+                unlink($upload_dir . $row['qr_code']);
+            }
         }
+        $stmt_img->close();
+
+        $stmt = $conn->prepare("DELETE FROM payment_method WHERE id = ?");
+        $stmt->bind_param("i", $idToDelete);
+        $stmt->execute();
         $stmt->close();
+
         header("Location: manage_payment.php");
         exit();
     }
 }
 
-// Fetch all payments with payment method name
-$sql = "SELECT Payment.*, Orders.order_number, Users.name as customer_name, payment_method.method_name
-        FROM Payment
-        LEFT JOIN Orders ON Payment.order_id = Orders.id
-        LEFT JOIN Users ON Orders.user_id = Users.id
-        LEFT JOIN payment_method ON Payment.payment_method_id = payment_method.id
-        ORDER BY Payment.id DESC";
-$result = $conn->query($sql);
-$totalPayments = $result ? $result->num_rows : 0;
+// Fetch all payment methods
+$all_methods_query = "SELECT * FROM payment_method ORDER BY id DESC";
+$result = $conn->query($all_methods_query);
+$allMethods = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+$totalMethods = count($allMethods);
 
-// Count by status and system counters
-$pending = $conn->query("SELECT COUNT(*) as t FROM Payment WHERE status='pending'")->fetch_assoc()['t'] ?? 0;
-$paid = $conn->query("SELECT COUNT(*) as t FROM Payment WHERE status='paid'")->fetch_assoc()['t'] ?? 0;
-$rejected = $conn->query("SELECT COUNT(*) as t FROM Payment WHERE status='rejected'")->fetch_assoc()['t'] ?? 0;
-$totalAmount = $conn->query("SELECT SUM(amount) as t FROM Payment WHERE status='paid'")->fetch_assoc()['t'] ?? 0;
-
-// Fetch Live Alert Badge & Dropdown Notifications (Synced with categories.php layout)
+// Fetch alert badge notifications
 $low_stock_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Books WHERE stock < 3");
 $low_stock_count = mysqli_fetch_assoc($low_stock_query)['total'] ?? 0;
 
 $pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
 $pending_payments_count = mysqli_num_rows($pending_payments_query);
+
+// Edit mode initialization
+$editMethod = null;
+if (isset($_GET['edit_id'])) {
+    $editId = (int)$_GET['edit_id'];
+    $stmt = $conn->prepare("SELECT * FROM payment_method WHERE id = ?");
+    $stmt->bind_param("i", $editId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res->num_rows > 0) {
+        $editMethod = $res->fetch_assoc();
+    }
+    $stmt->close();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Payments - Online Book Shop</title>
+    <title>Manage Payment Methods - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
     </style>
 </head>
-<body class="bg-slate-50 font-sans antialiased text-slate-800">
 
-<div class="flex h-screen overflow-hidden">
-    
-    <!-- SIDEBAR CONTAINER -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-400 flex flex-col justify-between transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 border-r border-slate-800 shrink-0">
-        <div class="p-6 overflow-y-auto no-scrollbar flex-1">
-            <div class="flex items-center justify-between mb-8 px-2">
-                <div class="flex items-center space-x-3">
-                    <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
-                        <i class="fa-solid fa-book-open text-sm"></i>
+<body class="bg-gray-300 font-sans antialiased text-slate-800">
+
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- Sidebar Navigation Include -->
+        <?php include '../auth/sidebar.php'; ?>
+
+        <div class="flex-1 flex flex-col overflow-hidden w-full">
+
+            <!-- Header Navigation Component Include -->
+            <?php 
+                $page_title = "Payment Methods Management";
+                include '../auth/nav.php'; 
+            ?>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 overflow-y-auto p-4 md:p-8 max-w-[1600px] w-full mx-auto">
+
+                <!-- Page Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <i class="fa-solid fa-wallet text-indigo-600"></i> Payment Methods
+                        </h1>
+                        <p class="text-xs text-slate-500 mt-1"><?= $totalMethods; ?> payment options configured</p>
                     </div>
-                    <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">BookShop</span>
+                    <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full font-bold border border-indigo-100 w-fit">
+                        <i class="fa-solid fa-layer-group mr-1"></i> <?= $totalMethods; ?> Total
+                    </span>
                 </div>
-                <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-white cursor-pointer">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-            
-            <nav class="space-y-1.5">
-                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-chart-pie w-5"></i><span>Dashboard</span>
-                </a>
-                <a href="books.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-book w-5"></i><span>Manage Books</span>
-                </a>
-                <a href="categories.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-tags w-5"></i><span>Categories</span>
-                </a>
-                <a href="orders.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-cart-shopping w-5"></i><span>Orders</span>
-                </a>
-                <a href="manage_payment.php" class="flex items-center space-x-3 px-4 py-3 bg-indigo-600 text-white rounded-xl font-medium shadow-sm shadow-indigo-600/10">
-                    <i class="fa-solid fa-credit-card w-5 text-indigo-200"></i><span>Payments</span>
-                </a>
-                <a href="delivery.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-truck w-5"></i><span>Deliveries</span>
-                </a>
-                <a href="customers.php" class="flex items-center space-x-3 px-4 py-3 hover:bg-slate-800 hover:text-white rounded-xl font-medium transition">
-                    <i class="fa-solid fa-users w-5"></i><span>Customers</span>
-                </a>
-            </nav>
-        </div>
-        
-        <div class="p-4 border-t border-slate-800 bg-slate-950/30">
-            <a href="../auth/logout.php" class="flex items-center justify-center space-x-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-rose-600/20 group">
-                <i class="fa-solid fa-right-from-bracket group-hover:transform group-hover:translate-x-0.5 transition"></i><span>Sign Out</span>
-            </a>
-        </div>
-    </aside>
 
-    <div id="sidebarOverlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/40 z-40 hidden transition-opacity duration-300"></div>
+                <!-- Flash Action Status Alerts -->
+                <?php if (!empty($message)): ?>
+                    <div class="mb-5 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-circle-check"></i> <?= htmlspecialchars($message); ?>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($error)): ?>
+                    <div class="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-circle-exclamation"></i> <?= htmlspecialchars($error); ?>
+                    </div>
+                <?php endif; ?>
 
-    <div class="flex-1 flex flex-col overflow-hidden w-full">
-        
-        <!-- TOP NAVIGATION BAR -->
-        <header class="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-4 md:px-8 z-40 shrink-0">
-            <div class="flex items-center space-x-3">
-                <button onclick="toggleSidebar()" class="p-2 rounded-xl text-slate-600 hover:bg-slate-50 md:hidden transition cursor-pointer">
-                    <i class="fa-solid fa-bars text-lg"></i>
-                </button>
-                <h1 class="text-lg font-bold text-slate-800 md:text-xl">Payments Management</h1>
-            </div>
+                <div class="flex flex-col lg:flex-row gap-6 items-start">
 
-            <div class="flex items-center space-x-4 relative">
-                <!-- Notifications Bell Button -->
-                <div class="relative">
-                    <button onclick="toggleNotificationDropdown(event)" id="notiBtn" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-                        <i class="fa-solid fa-bell"></i>
-                        <?php if ($low_stock_count > 0 || $pending_payments_count > 0): ?>
-                            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
-                        <?php endif; ?>
-                    </button>
+                    <!-- Form Panel Component -->
+                    <div class="w-full lg:w-96 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm shrink-0 h-fit">
+                        <div class="pb-3 border-b border-slate-100 mb-4">
+                            <h3 class="font-bold text-slate-900 text-sm flex items-center">
+                                <i class="fa-solid <?= $editMethod ? 'fa-pen-to-square text-amber-500' : 'fa-circle-plus text-indigo-500'; ?> mr-2"></i>
+                                <?= $editMethod ? 'Update Payment Method' : 'Add New Payment Method'; ?>
+                            </h3>
+                        </div>
 
-                    <!-- Notifications Dropdown (Populates live operational details upon clicking) -->
-                    <div id="notiDropdown" class="hidden absolute right-0 top-12 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
-                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 font-bold text-xs text-slate-700">Notifications</div>
-                        <div class="divide-y divide-slate-100 max-h-64 overflow-y-auto no-scrollbar">
-                            <?php if ($pending_payments_count > 0): ?>
-                                <?php while($payment = mysqli_fetch_assoc($pending_payments_query)): ?>
-                                <a href="manage_payment.php" class="block p-3 hover:bg-slate-50 transition">
-                                    <p class="text-xs font-bold text-indigo-600 flex items-center"><i class="fa-solid fa-wallet mr-1.5"></i> New Bank Transfer Pending</p>
-                                    <p class="text-xxs text-slate-500 mt-0.5">Amount: <?php echo number_format($payment['amount']); ?> MMK awaiting approval.</p>
-                                </a>
-                                <?php endwhile; ?>
+                        <form action="manage_payment.php" method="POST" enctype="multipart/form-data" class="space-y-4">
+                            <?php if ($editMethod): ?>
+                                <input type="hidden" name="method_id" value="<?= $editMethod['id']; ?>">
+                                <input type="hidden" name="old_qr_code" value="<?= htmlspecialchars($editMethod['qr_code']); ?>">
                             <?php endif; ?>
 
-                            <?php if ($low_stock_count > 0): ?>
-                                <div class="block p-3 bg-amber-50/40">
-                                    <p class="text-xs font-bold text-amber-600 flex items-center"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Critical Stock Warning</p>
-                                    <p class="text-xxs text-slate-500 mt-0.5">You have <?php echo $low_stock_count; ?> books currently running low on stock.</p>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Method Name</label>
+                                <input type="text" name="method_name" placeholder="KBZPay, WavePay,..."
+                                    value="<?= $editMethod ? htmlspecialchars($editMethod['method_name']) : ''; ?>"
+                                    required
+                                    class="bg-slate-50 text-xs w-full rounded-xl p-2.5 border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Account Number</label>
+                                <input type="text" name="account_number" placeholder="09xxxxxxxxx"
+                                    value="<?= $editMethod ? htmlspecialchars($editMethod['account_number']) : ''; ?>"
+                                    required
+                                    class="bg-slate-50 text-xs w-full rounded-xl p-2.5 border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Account Holder</label>
+                                <input type="text" name="account_holder" placeholder=""
+                                    value="<?= $editMethod ? htmlspecialchars($editMethod['account_holder']) : ''; ?>"
+                                    required
+                                    class="bg-slate-50 text-xs w-full rounded-xl p-2.5 border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+
+                            <!-- Custom QR Code Upload (Hides File Name Text and Shows Small Preview) -->
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">QR CODE IMAGE</label>
+                                <div class="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                                    <label class="relative cursor-pointer bg-white border border-slate-300 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5 shrink-0">
+                                        <i class="fa-solid fa-cloud-arrow-up text-indigo-500"></i> Choose File
+                                        <input type="file" name="qr_code" id="qrCodeInput" accept="image/*" onchange="previewQRCode(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                                    </label>
+                                    
+                                    <!-- Dynamic Preview Image (Hides filename text) -->
+                                    <img id="qrPreview" 
+                                         src="<?= ($editMethod && !empty($editMethod['qr_code'])) ? '../uploads/qr_codes/' . htmlspecialchars($editMethod['qr_code']) : ''; ?>" 
+                                         alt="Preview" 
+                                         class="w-8 h-8 object-cover rounded-lg border border-slate-200 shrink-0 <?= ($editMethod && !empty($editMethod['qr_code'])) ? '' : 'hidden'; ?>">
                                 </div>
-                            <?php endif; ?>
+                            </div>
 
-                            <?php if ($low_stock_count == 0 && $pending_payments_count == 0): ?>
-                                <div class="p-4 text-center text-xs text-slate-400 font-medium">No new operational notifications.</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Admin Profile Menu Button (Updated with Profile Image View directly matching orders.php) -->
-                <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer overflow-hidden">
-                        <?php if (!empty($profile_path) && file_exists($profile_path)): ?>
-                            <img src="<?= htmlspecialchars($profile_path); ?>" alt="Admin" class="w-full h-full object-cover">
-                        <?php else: ?>
-                            <i class="fa-solid fa-user text-sm"></i>
-                        <?php endif; ?>
-                    </button>
-                    <div id="profileDropdown" class="hidden absolute right-0 top-12 w-48 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
-                        <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
-                            <p class="text-xs font-bold text-slate-800 truncate"><?php echo htmlspecialchars($admin_name); ?></p>
-                            <p class="text-[10px] text-slate-400 truncate"><?php echo htmlspecialchars($admin_email); ?></p>
-                        </div>
-                        <div class="py-1">
-                            <a href="dashboard.php" class="flex items-center space-x-2 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition">
-                                <i class="fa-solid fa-chart-pie w-4 text-slate-400"></i><span>Dashboard</span>
-                            </a>
-                            <a href="adminprofile.php" class="flex items-center space-x-2 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition">
-                                <i class="fa-solid fa-id-card w-4 text-slate-400"></i><span>My Profile</span>
-                            </a>
-                            <a href="../auth/logout.php" class="flex items-center space-x-2 px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition">
-                                <i class="fa-solid fa-right-from-bracket w-4 text-rose-500"></i><span>Sign Out</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Description</label>
+                                <textarea name="description" rows="3" placeholder="Transfer notes or instructions..."
+                                    class="bg-slate-50 text-xs w-full rounded-xl p-2.5 border border-slate-200 outline-none focus:border-indigo-500 focus:bg-white transition"><?= $editMethod ? htmlspecialchars($editMethod['description']) : ''; ?></textarea>
+                            </div>
 
-        <!-- MAIN CANVAS -->
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 max-w-[1600px] w-full mx-auto space-y-6">
-            
-            <!-- Page Header -->
-            <div>
-                <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <i class="fa-solid fa-credit-card text-indigo-600"></i> Payments
-                </h1>
-                <p class="text-xs text-gray-400 mt-1"><?= $totalPayments; ?> payment records</p>
-            </div>
+                            <div class="flex items-center gap-2 pt-1">
+                                <input type="checkbox" name="is_active" id="is_active" value="1" 
+                                    <?= ($editMethod ? ($editMethod['is_active'] ? 'checked' : '') : 'checked'); ?>
+                                    class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer">
+                                <label for="is_active" class="text-xs font-bold text-slate-700 cursor-pointer">Active Method</label>
+                            </div>
 
-            <!-- Flash messages -->
-            <?php if (!empty($message)): ?>
-                <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold flex items-center gap-2 shadow-sm">
-                    <i class="fa-solid fa-circle-check"></i> <?= htmlspecialchars($message); ?>
-                </div>
-            <?php endif; ?>
-            <?php if (!empty($error)): ?>
-                <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold flex items-center gap-2 shadow-sm">
-                    <i class="fa-solid fa-circle-exclamation"></i> <?= htmlspecialchars($error); ?>
-                </div>
-            <?php endif; ?>
+                            <div class="pt-2 flex gap-2">
+                                <?php if ($editMethod): ?>
+                                    <button type="submit" name="update_payment_method"
+                                        class="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold py-2.5 shadow-sm transition cursor-pointer">
+                                        Save Update
+                                    </button>
+                                    <a href="manage_payment.php"
+                                        class="flex-1 text-center bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl text-xs font-bold py-2.5 transition">
+                                        Cancel
+                                    </a>
+                                <?php else: ?>
+                                    <button type="submit" name="add_payment_method"
+                                        class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl text-xs py-2.5 shadow-sm transition cursor-pointer">
+                                        + Add Payment Method
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        </form>
+                    </div>
 
-            <!-- Stats cards -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/60 shadow-sm">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-                            <i class="fa-solid fa-clock text-sm"></i>
-                        </div>
-                    </div>
-                    <h3 class="text-2xl font-black text-gray-900"><?= $pending; ?></h3>
-                    <p class="text-[11px] text-gray-400 mt-0.5">Pending</p>
-                </div>
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/60 shadow-sm">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-                            <i class="fa-solid fa-check-circle text-sm"></i>
-                        </div>
-                    </div>
-                    <h3 class="text-2xl font-black text-gray-900"><?= $paid; ?></h3>
-                    <p class="text-[11px] text-gray-400 mt-0.5">Paid</p>
-                </div>
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/60 shadow-sm">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
-                            <i class="fa-solid fa-times-circle text-sm"></i>
-                        </div>
-                    </div>
-                    <h3 class="text-2xl font-black text-gray-900"><?= $rejected; ?></h3>
-                    <p class="text-[11px] text-gray-400 mt-0.5">Rejected</p>
-                </div>
-                <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/60 shadow-sm col-span-2 lg:col-span-1">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                            <i class="fa-solid fa-wallet text-sm"></i>
-                        </div>
-                    </div>
-                    <h3 class="text-lg sm:text-xl font-black text-gray-900"> <?= number_format($totalAmount); ?>ကျပ်</h3>
-                    <p class="text-[11px] text-gray-400 mt-0.5">Total Collected</p>
-                </div>
-            </div>
+                    <!-- Payment Method List Panel -->
+                    <div class="w-full lg:flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between">
 
-            <!-- Desktop table -->
-            <div class="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase text-slate-500 tracking-wider">
-                                <th class="py-4 px-6">Order ID</th>
-                                <th class="py-4 px-6">Customer</th>
-                                <th class="py-4 px-6">Method</th>
-                                <th class="py-4 px-6">Ref ID</th>
-                                <th class="py-4 px-6">Slip</th>
-                                <th class="py-4 px-6">Status</th>
-                                <th class="py-4 px-6 text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm text-slate-700">
-                            <?php if ($result && $result->num_rows > 0): ?>
-                                <?php while($row = $result->fetch_assoc()): ?>
-                                    <tr class="hover:bg-slate-50/80 transition">
-                                        <td class="py-4 px-6 font-bold text-slate-900">#<?= htmlspecialchars($row['order_id']); ?></td>
-                                        <td class="py-4 px-6 font-medium"><?= htmlspecialchars($row['customer_name'] ?? 'Unknown'); ?></td>
-                                        <td class="py-4 px-6"><span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold uppercase"><?= htmlspecialchars($row['method_name'] ?? 'Online'); ?></span></td>
-                                        <td class="py-4 px-6 font-mono text-xs tracking-wide text-slate-500"><?= htmlspecialchars($row['transaction_ref']); ?></td>
-                                        <td class="py-4 px-6">
-                                            <?php if (!empty($row['payment_slip'])): ?>
-                                                <button type="button" onclick="openSlipModal('../assets/<?= htmlspecialchars($row['payment_slip']); ?>')" class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition bg-indigo-50 hover:bg-indigo-100 py-1.5 px-3 rounded-lg cursor-pointer">
-                                                    <i class="fa-regular fa-image"></i> View
-                                                </button>
-                                            <?php else: ?>
-                                                <span class="text-xs text-slate-400 italic">No slip</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="py-4 px-6">
-                                            <?php 
-                                            $status = strtolower($row['status']);
-                                            if ($status === 'paid') echo '<span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-bold">Paid</span>';
-                                            elseif ($status === 'rejected') echo '<span class="px-2.5 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-bold">Rejected</span>';
-                                            else echo '<span class="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold">Pending</span>';
-                                            ?>
-                                        </td>
-                                        <td class="py-4 px-6">
-                                            <div class="flex items-center justify-center gap-2">
-                                                <?php if ($status === 'pending'): ?>
-                                                    <form action="" method="POST" onsubmit="return confirm('Approve this payment?');">
-                                                        <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
-                                                        <button type="submit" name="approve_payment" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition shadow-sm cursor-pointer">Approve</button>
-                                                    </form>
-                                                    <form action="" method="POST" onsubmit="return confirm('Reject this payment?');">
-                                                        <input type="hidden" name="payment_id" value="<?= $row['id']; ?>">
-                                                        <button type="submit" name="reject_payment" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition shadow-sm cursor-pointer">Reject</button>
-                                                    </form>
-                                                <?php else: ?>
-                                                    <span class="text-xs text-slate-400 italic">Processed</span>
-                                                <?php endif; ?>
+                        <div>
+                            <!-- Desktop Table View -->
+                            <div class="hidden sm:block">
+                                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                                    <h3 class="font-bold text-slate-700 text-sm flex items-center">
+                                        <i class="fa-solid fa-list text-slate-400 mr-2"></i> Payment Methods Registry
+                                    </h3>
+                                </div>
+
+                                <?php if (!empty($allMethods)): ?>
+                                    <div class="overflow-x-auto w-full no-scrollbar">
+                                        <table class="w-full text-left border-collapse min-w-[700px]">
+                                            <thead>
+                                                <tr class="bg-white text-slate-900 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
+                                                    <th class="px-6 py-3.5 w-12">No</th>
+                                                    <th class="px-6 py-3.5">Method Name</th>
+                                                    <th class="px-6 py-3.5">Account Info</th>
+                                                    <th class="px-6 py-3.5 text-center">QR Code</th>
+                                                    <th class="px-6 py-3.5">Description</th>
+                                                    <th class="px-6 py-3.5 text-center">Status</th>
+                                                    <th class="px-6 py-3.5 text-center">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
+                                                <?php 
+                                                $no = 1;
+                                                foreach ($allMethods as $method): 
+                                                ?>
+                                                    <tr class="hover:bg-slate-50/60 transition <?= $editMethod && $editMethod['id'] == $method['id'] ? 'bg-amber-50/50' : ''; ?>">
+                                                        <td class="px-6 py-3.5 text-slate-400 font-semibold"><?= $no++; ?></td>
+                                                        <td class="px-6 py-3.5 font-bold text-slate-900 text-sm">
+                                                            <?= htmlspecialchars($method['method_name']); ?>
+                                                        </td>
+                                                        <td class="px-6 py-3.5">
+                                                            <div class="font-bold text-slate-800"><?= htmlspecialchars($method['account_number']); ?></div>
+                                                            <div class="text-[11px] text-slate-500"><?= htmlspecialchars($method['account_holder']); ?></div>
+                                                        </td>
+                                                        <td class="px-6 py-3.5 text-center">
+                                                            <?php if (!empty($method['qr_code'])): ?>
+                                                                <img src="../uploads/qr_codes/<?= htmlspecialchars($method['qr_code']); ?>" alt="QR" class="w-10 h-10 object-cover rounded-lg border border-slate-200 mx-auto">
+                                                            <?php else: ?>
+                                                                <span class="text-slate-400 text-[11px]">No QR</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="px-6 py-3.5 text-slate-600 max-w-xs truncate" title="<?= htmlspecialchars($method['description']); ?>">
+                                                            <?= htmlspecialchars($method['description']); ?>
+                                                        </td>
+                                                        <td class="px-6 py-3.5 text-center">
+                                                            <?php if ($method['is_active']): ?>
+                                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                                                    Active
+                                                                </span>
+                                                            <?php else: ?>
+                                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                                                    Inactive
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="px-6 py-3.5 text-center">
+                                                            <div class="flex items-center justify-center space-x-2">
+                                                                <a href="manage_payment.php?edit_id=<?= $method['id']; ?>"
+                                                                    class="inline-flex items-center justify-center px-2.5 py-1.5 bg-blue-500 hover:bg-blue-700 text-white rounded-xl font-bold transition">
+                                                                    <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                                                                </a>
+                                                                <form action="manage_payment.php" method="POST" onsubmit="return confirm('Are you sure you want to completely remove this payment method?');" class="inline">
+                                                                    <input type="hidden" name="method_id" value="<?= $method['id']; ?>">
+                                                                    <button type="submit" name="delete_payment_method"
+                                                                        class="inline-flex items-center justify-center px-2.5 py-1.5 bg-red-500 hover:bg-red-700 text-white border border-red-200/60 rounded-xl font-bold transition cursor-pointer">
+                                                                        <i class="fa-solid fa-trash-can mr-1"></i> Delete
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="py-16 text-center text-slate-400 font-semibold">
+                                        <i class="fa-solid fa-wallet text-4xl text-slate-200 mb-3"></i>
+                                        <p>No payment methods found.</p>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Mobile View Cards -->
+                            <div class="sm:hidden p-4 space-y-3">
+                                <?php if (!empty($allMethods)): ?>
+                                    <?php 
+                                    $m_no = 1;
+                                    foreach ($allMethods as $method): 
+                                    ?>
+                                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 <?= $editMethod && $editMethod['id'] == $method['id'] ? 'ring-2 ring-amber-300 bg-amber-50/30' : ''; ?>">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <div class="flex items-center gap-2 min-w-0">
+                                                    <span class="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+                                                        <?= $m_no++; ?>
+                                                    </span>
+                                                    <span class="font-bold text-sm text-slate-900 truncate"><?= htmlspecialchars($method['method_name']); ?></span>
+                                                </div>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <?php if ($method['is_active']): ?>
+                                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Active</span>
+                                                    <?php else: ?>
+                                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Inactive</span>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
-                                        </td>
-                                    </tr>
-                                <?php endwhile; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="7" class="py-8 text-center text-sm text-slate-400 font-medium">No payment history discovered.</td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+
+                                            <div class="flex items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                                <?php if (!empty($method['qr_code'])): ?>
+                                                    <img src="../uploads/qr_codes/<?= htmlspecialchars($method['qr_code']); ?>" alt="QR" class="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0">
+                                                <?php endif; ?>
+                                                <div class="text-xs text-slate-600 space-y-0.5">
+                                                    <div><span class="font-bold text-slate-800">Acc No:</span> <?= htmlspecialchars($method['account_number']); ?></div>
+                                                    <div><span class="font-bold text-slate-800">Holder:</span> <?= htmlspecialchars($method['account_holder']); ?></div>
+                                                    <?php if(!empty($method['description'])): ?>
+                                                        <div class="text-slate-500 text-[11px]"><?= htmlspecialchars($method['description']); ?></div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                                                <a href="manage_payment.php?edit_id=<?= $method['id']; ?>"
+                                                    class="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                                                    <i class="fa-solid fa-pen-to-square"></i> Edit
+                                                </a>
+                                                <form action="manage_payment.php" method="POST" onsubmit="return confirm('Delete this payment method?');" class="inline">
+                                                    <input type="hidden" name="method_id" value="<?= $method['id']; ?>">
+                                                    <button type="submit" name="delete_payment_method"
+                                                        class="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-bold flex items-center gap-1">
+                                                        <i class="fa-solid fa-trash-can"></i> Delete
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <div class="bg-white p-12 rounded-xl border border-slate-100 shadow-sm text-center">
+                                        <i class="fa-solid fa-wallet text-4xl text-slate-200 mb-3"></i>
+                                        <p class="text-slate-400 text-sm font-medium">No payment methods created yet.</p>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
-            </div>
-        </main>
-    </div>
-</div>
-
-<!-- ================= IMAGE POPUP MODAL ================= -->
-<div id="slipModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4 transition-opacity duration-300 opacity-0">
-    <div class="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-100 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]">
-        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <i class="fa-solid fa-receipt text-indigo-600"></i> Customer Payment Slip
-            </h3>
-            <button onclick="closeSlipModal()" class="w-7 h-7 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 transition cursor-pointer">
-                <i class="fa-solid fa-xmark text-sm"></i>
-            </button>
-        </div>
-        <div class="p-4 bg-slate-100/50 overflow-y-auto flex items-center justify-center flex-1 min-h-[300px]">
-            <img id="modalSlipImage" src="" alt="Payment Slip Screenshot" class="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-slate-200">
-        </div>
-        <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-100 text-right">
-            <button onclick="closeSlipModal()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-4 rounded-xl transition cursor-pointer">Close</button>
+            </main>
         </div>
     </div>
-</div>
 
-<script>
-    // Sidebar Toggles
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.getElementById('sidebarOverlay');
-        sidebar.classList.toggle('-translate-x-full');
-        overlay.classList.toggle('hidden');
-    }
+    <!-- Interface Controller Scripts -->
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        }
 
-    // Header Popups Configs 
-    function toggleNotificationDropdown(e) {
-        e.stopPropagation();
-        document.getElementById('notiDropdown').classList.toggle('hidden');
-        document.getElementById('profileDropdown').classList.add('hidden');
-    }
-    function toggleProfileDropdown(e) {
-        e.stopPropagation();
-        document.getElementById('profileDropdown').classList.toggle('hidden');
-        document.getElementById('notiDropdown').classList.add('hidden');
-    }
-    document.addEventListener('click', () => {
-        document.getElementById('notiDropdown').classList.add('hidden');
-        document.getElementById('profileDropdown').classList.add('hidden');
-    });
+        function toggleNotificationDropdown(e) {
+            e.stopPropagation();
+            document.getElementById('notiDropdown').classList.toggle('hidden');
+            document.getElementById('profileDropdown').classList.add('hidden');
+        }
 
-    // Modal Operations Scripts
-    function openSlipModal(imageSrc) {
-        const modal = document.getElementById('slipModal');
-        const img = document.getElementById('modalSlipImage');
-        
-        img.src = imageSrc;
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        
-        setTimeout(() => {
-            modal.classList.remove('opacity-0');
-            modal.querySelector('.transform').classList.remove('scale-95');
-        }, 10);
-    }
+        function toggleProfileDropdown(e) {
+            e.stopPropagation();
+            document.getElementById('profileDropdown').classList.toggle('hidden');
+            document.getElementById('notiDropdown').classList.add('hidden');
+        }
 
-    function closeSlipModal() {
-        const modal = document.getElementById('slipModal');
-        
-        modal.classList.add('opacity-0');
-        modal.querySelector('.transform').classList.add('scale-95');
-        
-        setTimeout(() => {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }, 300);
-    }
-</script>
+        // Live Image Preview for Choose File Input
+        function previewQRCode(event) {
+            const input = event.target;
+            const preview = document.getElementById('qrPreview');
+            
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        window.addEventListener('click', function(e) {
+            const notiDropdown = document.getElementById('notiDropdown');
+            const profileDropdown = document.getElementById('profileDropdown');
+
+            if (notiDropdown && !notiDropdown.contains(e.target) && !document.getElementById('notiBtn').contains(e.target)) {
+                notiDropdown.classList.add('hidden');
+            }
+            if (profileDropdown && !profileDropdown.contains(e.target) && !document.getElementById('profileBtn').contains(e.target)) {
+                profileDropdown.classList.add('hidden');
+            }
+        });
+    </script>
+
 </body>
+
 </html>

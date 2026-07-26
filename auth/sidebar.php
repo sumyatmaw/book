@@ -3,11 +3,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$base_url     = '/onlinebookshop'; // မိမိ project folder နာမည်အလိုက် လိုအပ်သလို ပြောင်းနိုင်သည်
+$base_url     = '/onlinebookshop';
 $current_page = $current_page ?? basename($_SERVER['PHP_SELF'], '.php');
 $is_admin     = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
 
-// Active ဖြစ်နေတဲ့ menu item တွေကို အရောင်ပြောင်းပေးမယ့် function
+
 function sidebar_active($page) {
     global $current_page;
     return $current_page === $page 
@@ -17,7 +17,7 @@ function sidebar_active($page) {
 ?>
 
 <!-- SIDEBAR CONTAINER -->
-<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-slate-400 flex flex-col justify-between transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 border-r border-slate-800 shrink-0">
+<aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col justify-between transform -translate-x-full transition-transform duration-300 md:relative md:translate-x-0 border-r border-slate-800 shrink-0">
     <div class="p-6 overflow-y-auto no-scrollbar flex-1">
         <div class="flex items-center justify-between mb-8 px-2">
             <div class="flex items-center space-x-3">
@@ -43,12 +43,13 @@ function sidebar_active($page) {
                 <a href="<?= $base_url; ?>/admin/categories.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('categories'); ?>">
                     <i class="fa-solid fa-tags w-5"></i><span>Categories</span>
                 </a>
-                <a href="<?= $base_url; ?>/admin/orders.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('orders'); ?>">
-                    <i class="fa-solid fa-cart-shopping w-5"></i><span>Orders</span>
-                </a>
                 <a href="<?= $base_url; ?>/admin/manage_payment.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('manage_payment'); ?>">
                     <i class="fa-solid fa-credit-card w-5"></i><span>Payments</span>
                 </a>
+                <a href="<?= $base_url; ?>/admin/orders.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('orders'); ?>">
+                    <i class="fa-solid fa-cart-shopping w-5"></i><span>Orders</span>
+                </a>
+                
                 <a href="<?= $base_url; ?>/admin/delivery.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('delivery'); ?>">
                     <i class="fa-solid fa-truck w-5"></i><span>Deliveries</span>
                 </a>

@@ -63,10 +63,10 @@ if ($is_logged_in) {
     }
 
     // Deduct stock immediately from Books table
-    $update_stock_stmt = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
-    $update_stock_stmt->bind_param("ii", $quantity, $book_id);
-    $update_stock_stmt->execute();
-    $update_stock_stmt->close();
+    // $update_stock_stmt = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
+    // $update_stock_stmt->bind_param("ii", $quantity, $book_id);
+    // $update_stock_stmt->execute();
+    // $update_stock_stmt->close();
 
     header("Location: cart.php");
     exit();
@@ -99,10 +99,10 @@ if ($is_logged_in) {
     }
 
     // Deduct stock immediately from Books table for guest user
-    $update_stock_stmt = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
-    $update_stock_stmt->bind_param("ii", $quantity, $book_id);
-    $update_stock_stmt->execute();
-    $update_stock_stmt->close();
+    // $update_stock_stmt = $conn->prepare("UPDATE Books SET stock = stock - ? WHERE id = ?");
+    // $update_stock_stmt->bind_param("ii", $quantity, $book_id);
+    // $update_stock_stmt->execute();
+    // $update_stock_stmt->close();
 
     header("Location: cart.php");
     exit();

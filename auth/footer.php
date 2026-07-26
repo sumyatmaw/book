@@ -6,7 +6,7 @@
  */
 $base_url = '/onlinebookshop';
 ?>
-<footer class="bg-slate-900 text-gray-400 border-t border-slate-800 mt-auto selection:bg-amber-500 selection:text-slate-900">
+<footer class="bg-yellow-300 text-slate-900 mt-auto selection:bg-amber-500 selection:text-slate-900">
     <!-- Top Decorative Gradient Line -->
     <div class="h-0.5 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-50"></div>
 
@@ -19,21 +19,21 @@ $base_url = '/onlinebookshop';
                     <span class="w-9 h-9 bg-gradient-to-br from-amber-400 to-amber-500 rounded-xl flex items-center justify-center group-hover:rotate-6 transition-all duration-300 shadow-lg shadow-amber-500/20">
                         <i class="fa-solid fa-book-open text-sm text-slate-900"></i>
                     </span>
-                    <span class="text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors duration-200">
-                        Online<span class="text-amber-500">BookShop</span>
+                    <span class="text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors duration-200">
+                        Online<span class="text-amber-600">BookShop</span>
                     </span>
                 </a>
-                <p class="text-xs leading-relaxed text-gray-400 antialiased font-light">
+                <p class="text-xs leading-relaxed text-slate-900 antialiased font-light">
                     လူကြီးမင်းတို့ စိတ်ကြိုက် သုတ၊ ရသ စာအုပ်အမျိုးမျိုးကို တစ်နေရာတည်းမှာ အလွယ်တကူ ဝယ်ယူဖတ်ရှုနိုင်မယ့် မြန်မာ့အကောင်းဆုံး အွန်လိုင်းစာအုပ်ဆိုင် ဖြစ်ပါတယ်။
                 </p>
                 <div class="flex items-center gap-2.5 pt-2">
-                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Facebook">
+                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-white border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 text-slate-900 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Facebook">
                         <i class="fa-brands fa-facebook-f"></i>
                     </a>
-                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Viber">
+                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-white border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 text-slate-900 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Viber">
                         <i class="fa-brands fa-viber"></i>
                     </a>
-                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-slate-800/80 border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 hover:text-slate-900 hover:border-amber-500 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Telegram">
+                    <a href="http://localhost/onlinebookshop/" target="_blank" class="w-8 h-8 rounded-lg bg-white border border-slate-700/50 flex items-center justify-center hover:bg-amber-500 text-slate-900 text-sm transition-all duration-200 hover:-translate-y-0.5" aria-label="Telegram">
                         <i class="fa-brands fa-telegram"></i>
                     </a>
                 </div>
@@ -41,21 +41,21 @@ $base_url = '/onlinebookshop';
 
             <!-- Quick Links -->
             <div>
-                <h3 class="text-xs font-bold text-white tracking-widest uppercase mb-4 border-l-2 border-amber-500 pl-2.5">Quick Links</h3>
+                <h3 class="text-xs font-bold text-slate-900 tracking-widest uppercase mb-4 border-l-2 border-amber-600 pl-2.5">Quick Links</h3>
                 <ul class="space-y-2.5 text-xs">
                     <li>
-                        <a href="<?= $base_url; ?>/index.php" class="hover:text-amber-400 transition-colors duration-200 flex items-center gap-2 group">
-                            <i class="fa-solid fa-chevron-right text-[8px] text-amber-500/50 group-hover:translate-x-1 transition-transform"></i> Home
+                        <a href="<?= $base_url; ?>/index.php" class="text-slate-900 hover:text-amber-700 transition-colors duration-200 flex items-center gap-2 group">
+                            <i class="fa-solid fa-chevron-right text-[8px] text-slate-900 group-hover:translate-x-1 transition-transform"></i> Home
                         </a>
                     </li>
                     <li>
-                        <a href="<?= $base_url; ?>/books.php" class="hover:text-amber-400 transition-colors duration-200 flex items-center gap-2 group">
-                            <i class="fa-solid fa-chevron-right text-[8px] text-amber-500/50 group-hover:translate-x-1 transition-transform"></i> Books
+                        <a href="<?= $base_url; ?>/books.php" class="text-slate-900 hover:text-amber-700 transition-colors duration-200 flex items-center gap-2 group">
+                            <i class="fa-solid fa-chevron-right text-[8px] text-slate-900 group-hover:translate-x-1 transition-transform"></i> Books
                         </a>
                     </li>
                     <li>
-                        <a href="<?= $base_url; ?>/user/cart.php" class="hover:text-amber-400 transition-colors duration-200 flex items-center gap-2 group">
-                            <i class="fa-solid fa-chevron-right text-[8px] text-amber-500/50 group-hover:translate-x-1 transition-transform"></i> Shopping Cart
+                        <a href="<?= $base_url; ?>/user/cart.php" class="text-slate-900 hover:text-amber-700 transition-colors duration-200 flex items-center gap-2 group">
+                            <i class="fa-solid fa-chevron-right text-[8px] text-slate-900 group-hover:translate-x-1 transition-transform"></i> Shopping Cart
                         </a>
                     </li>
                 </ul>
@@ -63,21 +63,21 @@ $base_url = '/onlinebookshop';
 
             <!-- Support Links -->
             <div>
-                <h3 class="text-xs font-bold text-white tracking-widest uppercase mb-4 border-l-2 border-amber-500 pl-2.5">Support</h3>
+                <h3 class="text-xs font-bold text-slate-900 tracking-widest uppercase mb-4 border-l-2 border-amber-600 pl-2.5">Support</h3>
                 <ul class="space-y-2.5 text-xs">
                     <li>
-                        <a href="<?= $base_url; ?>/terms.php" class="hover:text-amber-400 transition-colors duration-200 flex items-center gap-2 group">
-                            <i class="fa-solid fa-chevron-right text-[8px] text-amber-500/50 group-hover:translate-x-1 transition-transform"></i> Terms & Conditions
+                        <a href="<?= $base_url; ?>/terms.php" class="text-slate-900 hover:text-amber-700 transition-colors duration-200 flex items-center gap-2 group">
+                            <i class="fa-solid fa-chevron-right text-[8px] text-slate-900 group-hover:translate-x-1 transition-transform"></i> Terms & Conditions
                         </a>
                     </li>
                     <li>
-                        <a href="<?= $base_url; ?>/privacy.php" class="hover:text-amber-400 transition-colors duration-200 flex items-center gap-2 group">
-                            <i class="fa-solid fa-chevron-right text-[8px] text-amber-500/50 group-hover:translate-x-1 transition-transform"></i> Privacy Policy
+                        <a href="<?= $base_url; ?>/privacy.php" class="text-slate-900 hover:text-amber-700 transition-colors duration-200 flex items-center gap-2 group">
+                            <i class="fa-solid fa-chevron-right text-[8px] text-slate-900 group-hover:translate-x-1 transition-transform"></i> Privacy Policy
                         </a>
                     </li>
                     <li>
-                        <a href="<?= $base_url; ?>/howtoorder.php" class="hover:text-amber-400 transition-colors duration-200 flex items-center gap-2 group">
-                            <i class="fa-solid fa-chevron-right text-[8px] text-amber-500/50 group-hover:translate-x-1 transition-transform"></i> How to Order
+                        <a href="<?= $base_url; ?>/howtoorder.php" class="text-slate-900 hover:text-amber-700 transition-colors duration-200 flex items-center gap-2 group">
+                            <i class="fa-solid fa-chevron-right text-[8px] text-slate-900 group-hover:translate-x-1 transition-transform"></i> How to Order
                         </a>
                     </li>
                 </ul>
@@ -85,19 +85,19 @@ $base_url = '/onlinebookshop';
 
             <!-- Contact Info -->
             <div>
-                <h3 class="text-xs font-bold text-white tracking-widest uppercase mb-4 border-l-2 border-amber-500 pl-2.5">Contact Us</h3>
-                <ul class="space-y-3.5 text-xs">
+                <h3 class="text-xs font-bold text-slate-900 tracking-widest uppercase mb-4 border-l-2 border-amber-600 pl-2.5">Contact Us</h3>
+                <ul class="space-y-3.5 text-xs text-slate-900">
                     <li class="flex items-start gap-2.5 leading-relaxed">
-                        <i class="fa-solid fa-location-dot text-amber-500 mt-0.5 shrink-0 text-sm"></i>
+                        <i class="fa-solid fa-location-dot text-slate-900 mt-0.5 shrink-0 text-sm"></i>
                         <span>အမှတ် (၁၂၃)၊ ကမ္ဘာအေးဘုရားလမ်း၊ မရမ်းကုန်းမြို့နယ်၊ ရန်ကုန်မြို့။</span>
                     </li>
                     <li class="flex items-center gap-2.5">
-                        <i class="fa-solid fa-phone text-amber-500 shrink-0 text-sm"></i>
-                        <span class="hover:text-white transition-colors">09-403502387, 09-760968003</span>
+                        <i class="fa-solid fa-phone text-slate-900 shrink-0 text-sm"></i>
+                        <span class="hover:text-amber-700 transition-colors">09-403502387, 09-760968003</span>
                     </li>
                     <li class="flex items-center gap-2.5">
-                        <i class="fa-solid fa-envelope text-amber-500 shrink-0 text-sm"></i>
-                        <a href="mailto:info@onlinebookshop.com" class="hover:text-amber-400 transition-colors">info@onlinebookshop.com</a>
+                        <i class="fa-solid fa-envelope text-slate-900 shrink-0 text-sm"></i>
+                        <a href="mailto:info@onlinebookshop.com" class="hover:text-amber-700 transition-colors">info@onlinebookshop.com</a>
                     </li>
                 </ul>
             </div>
