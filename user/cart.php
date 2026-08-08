@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 
                 $response = ['success' => true, 'new_item_total' => number_format($new_total) . ' ကျပ်'];
             } else {
-                $response = ['success' => false, 'message' => 'Requested quantity exceeds available stock level. Only ' . $available_stock . ' items available.'];
+                $response = ['success' => false, 'message' => 'စာအုပ်လက်ကျန်မှာ ' . $available_stock . ' ပဲရှိပါတော့သဖြင့် ထပ်မံဝယ်ယူ၍ မရနိုင်ပါ။'];
             }
         }
     } elseif (!$is_logged_in && isset($_SESSION['guest_cart'][$idx])) {
@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 
             $response = ['success' => true, 'new_item_total' => number_format($new_total) . ' ကျပ်'];
         } else {
-            $response = ['success' => false, 'message' => 'Requested quantity exceeds available stock level. Only ' . $available_stock . ' items available.'];
+            $response = ['success' => false, 'message' => 'စာအုပ်လက်ကျန်မှာ ' . $available_stock . ' ပဲရှိပါတော့သဖြင့် ထပ်မံဝယ်ယူ၍ မရနိုင်ပါ။'];
         }
     }
 
@@ -166,26 +166,21 @@ if ($cat_result) {
     <title>My Cart - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .btn-popover-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            right: 12px;
+            border-width: 6px 6px 0 6px;
+            border-style: solid;
+            border-color: #e11d48 transparent transparent transparent;
+        }
+    </style>
 </head>
-<body class="bg-gray-300 min-h-screen flex flex-col font-sans text-slate-800 relative antialiased">
+<body class="bg-gray-300 min-h-screen flex flex-col font-sans text-slate-900 relative antialiased">
 
     <?php include __DIR__ . '/../auth/header.php'; ?>
-
-    <!-- Stock Alert Toast Notification -->
-    <div id="cartStockToast" class="fixed top-5 right-5 z-50 transform translate-x-full opacity-0 transition-all duration-300 pointer-events-none max-w-sm w-[90%] sm:w-full mx-auto sm:mx-0">
-        <div class="bg-gray-500 border-l-4 border-rose-500 rounded-xl shadow-xl p-4 flex items-start gap-3 border border-slate-100">
-            <div class="bg-rose-50 p-2 rounded-lg text-rose-600 flex-shrink-0">
-                <i class="fa-solid fa-triangle-exclamation text-lg"></i>
-            </div>
-            <div class="flex-1">
-                <h4 class="font-bold text-slate-900 text-sm mb-0.5">Notification</h4>
-                <p id="toastMessage" class="text-xs text-slate-600 leading-relaxed"></p>
-            </div>
-            <button onclick="hideCartToast()" class="text-slate-400 hover:text-slate-600 transition p-1 flex-shrink-0">
-                <i class="fa-solid fa-xmark text-sm"></i>
-            </button>
-        </div>
-    </div>
 
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 flex-1 w-full">
         <h1 class="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 mb-6 flex items-center gap-3">
@@ -194,9 +189,9 @@ if ($cat_result) {
 
         <?php if (!empty($cart_items)): ?>
             <div class="bg-gray-50 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto overflow-y-visible">
                     <table class="w-full text-xs sm:text-sm min-w-[600px]">
-                        <thead class="bg-gray-500 text-white uppercase text-[10px] sm:text-[11px] tracking-wider">
+                        <thead class="bg-gray-400 text-white uppercase text-[10px] sm:text-[11px] tracking-wider">
                             <tr>
                                 <th class="p-3 sm:p-4 text-left font-bold">Image</th>
                                 <th class="p-3 sm:p-4 text-left font-bold">Book</th>
@@ -227,28 +222,36 @@ if ($cat_result) {
                                     <td class="p-3 sm:p-4 text-center text-slate-600 font-medium whitespace-nowrap">
                                         <?= number_format($item['unit_price']); ?> ကျပ်
                                     </td>
-                                    <td class="p-3 sm:p-4 text-center whitespace-nowrap">
-                                        <div class="inline-flex items-center gap-0 bg-slate-100 rounded-lg border border-slate-200">
-                                            <!-- Minus Button -->
-                                            <button type="button" 
-                                                    onclick="changeQuantity(<?= $index; ?>, <?= $cart_item_id; ?>, -1)"
-                                                    id="btn-minus-<?= $index; ?>"
-                                                    class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-l-lg transition font-bold <?= $item['quantity'] <= 1 ? 'opacity-40 cursor-not-allowed' : '' ?>" <?= $item['quantity'] <= 1 ? 'disabled' : '' ?>>
-                                                <i class="fa-solid fa-minus text-[10px]"></i>
-                                            </button>
-                                            
-                                            <!-- Live Counter View -->
-                                            <span id="qty-val-<?= $index; ?>" data-current-qty="<?= $item['quantity']; ?>" class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-800 border-x border-slate-200">
-                                                <?= $item['quantity']; ?>
-                                            </span>
-                                            
-                                            <!-- Plus Button -->
-                                            <button type="button" 
-                                                    onclick="changeQuantity(<?= $index; ?>, <?= $cart_item_id; ?>, 1)"
-                                                    id="btn-plus-<?= $index; ?>"
-                                                    class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-r-lg transition font-bold">
-                                                <i class="fa-solid fa-plus text-[10px]"></i>
-                                            </button>
+                                    <td class="p-3 sm:p-4 text-center whitespace-nowrap overflow-visible">
+                                        <div class="relative inline-block overflow-visible">
+                                            <!-- Alert Popover directly anchored above the + button -->
+                                            <div id="popover-alert-<?= $index; ?>" 
+                                                 class="hidden absolute bottom-full right-0 mb-2.5 w-max max-w-[240px] sm:max-w-[320px] bg-rose-600 text-white text-[11px] sm:text-xs rounded-2xl px-3.5 py-2.5 shadow-xl z-50 transition-all duration-200 text-left font-normal leading-relaxed btn-popover-arrow pointer-events-none whitespace-normal">
+                                                <p id="popover-msg-<?= $index; ?>"></p>
+                                            </div>
+
+                                            <div class="inline-flex items-center gap-0 bg-slate-100 rounded-lg border border-slate-200">
+                                                <!-- Minus Button -->
+                                                <button type="button" 
+                                                        onclick="changeQuantity(<?= $index; ?>, <?= $cart_item_id; ?>, -1)"
+                                                        id="btn-minus-<?= $index; ?>"
+                                                        class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-l-lg transition font-bold <?= $item['quantity'] <= 1 ? 'opacity-40 cursor-not-allowed' : '' ?>" <?= $item['quantity'] <= 1 ? 'disabled' : '' ?>>
+                                                    <i class="fa-solid fa-minus text-[10px]"></i>
+                                                </button>
+                                                
+                                                <!-- Live Counter View -->
+                                                <span id="qty-val-<?= $index; ?>" data-current-qty="<?= $item['quantity']; ?>" class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm font-bold text-slate-800 border-x border-slate-200">
+                                                    <?= $item['quantity']; ?>
+                                                </span>
+                                                
+                                                <!-- Plus Button -->
+                                                <button type="button" 
+                                                        onclick="changeQuantity(<?= $index; ?>, <?= $cart_item_id; ?>, 1)"
+                                                        id="btn-plus-<?= $index; ?>"
+                                                        class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-r-lg transition font-bold">
+                                                    <i class="fa-solid fa-plus text-[10px]"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="p-3 sm:p-4 text-center font-black text-slate-900 item-total-price whitespace-nowrap">
@@ -306,21 +309,23 @@ if ($cat_result) {
     <?php include __DIR__ . '/../auth/footer.php'; ?>
 
     <script>
-    // Display custom stock warning toast
-    function displayCartToast(msg) {
-        const toast = document.getElementById('cartStockToast');
-        document.getElementById('toastMessage').innerText = msg;
-        toast.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
-        toast.classList.add('translate-x-0', 'opacity-100');
-        setTimeout(hideCartToast, 4500);
-    }
+    let activeTimer = null;
 
-    // Hide custom stock warning toast
-    function hideCartToast() {
-        const toast = document.getElementById('cartStockToast');
-        if (toast) {
-            toast.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none');
-            toast.classList.remove('translate-x-0', 'opacity-100');
+    // Display localized popover alert directly above the clicked + button
+    function showButtonAlert(index, msg) {
+        document.querySelectorAll('[id^="popover-alert-"]').forEach(el => el.classList.add('hidden'));
+
+        const alertBox = document.getElementById(`popover-alert-${index}`);
+        const alertMsg = document.getElementById(`popover-msg-${index}`);
+
+        if (alertBox && alertMsg) {
+            alertMsg.innerText = msg;
+            alertBox.classList.remove('hidden');
+
+            if (activeTimer) clearTimeout(activeTimer);
+            activeTimer = setTimeout(() => {
+                alertBox.classList.add('hidden');
+            }, 3500);
         }
     }
 
@@ -330,7 +335,6 @@ if ($cat_result) {
         const rowElement = document.getElementById(`row-${index}`);
         const currentQty = parseInt(qtyElement.getAttribute('data-current-qty'));
         const availableStock = parseInt(rowElement.getAttribute('data-stock'));
-        const bookTitle = rowElement.getAttribute('data-title');
         
         const newQty = currentQty + adjustment;
 
@@ -338,7 +342,7 @@ if ($cat_result) {
         
         // Check physical stock limit before sending request
         if (newQty > availableStock) {
-            displayCartToast(`"${bookTitle}" အတွက် သင်မှာယူထားသော အရေအတွက်သည် ဆိုင်ရှိလက်ကျန်အရေအတွက်ထက် များနေပါသဖြင့် ထပ်မံတိုးမြှင့်၍ မရနိုင်တော့ပါဗျာ။`);
+            showButtonAlert(index, `စာအုပ်လက်ကျန်မှာ ${availableStock} ပဲရှိပါတော့သဖြင့် ထပ်မံဝယ်ယူ၍ မရနိုင်ပါ။`);
             return;
         }
 
@@ -376,18 +380,17 @@ if ($cat_result) {
                     minusBtn.removeAttribute('disabled');
                 }
 
-                // Synchronize Header Navigation Cart Badge and Total Price
+                // Synchronize Header Navigation Cart Badge
                 if (typeof window.refreshCartBadge === 'function') {
                     window.refreshCartBadge();
                 } else {
-                    // Fallback to directly update cart badge element if function is not available
                     const cartBadge = document.querySelector('.cart-badge-count');
                     if (cartBadge && data.cart_count !== undefined) {
                         cartBadge.innerText = data.cart_count;
                     }
                 }
             } else {
-                displayCartToast(data.message || 'ပစ္စည်းလက်ကျန် မလုံလောက်ပါသဖြင့် မအောင်မြင်ပါ။');
+                showButtonAlert(index, data.message || `စာအုပ်လက်ကျန်မှာ ${availableStock} ပဲရှိပါတော့သဖြင့် ထပ်မံဝယ်ယူ၍ မရနိုင်ပါ။`);
             }
         })
         .catch(err => {

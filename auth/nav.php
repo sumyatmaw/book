@@ -1,3 +1,34 @@
+<?php
+// Session check for user details and database query requirement
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Fetch Admin Details from Session
+$admin_name = $_SESSION['user_name'] ?? 'Admin User';
+$admin_email = $_SESSION['user_email'] ?? 'admin@bookshop.com';
+$admin_initial = strtoupper(substr($admin_name, 0, 1));
+
+// Sync Profile Image from Database if not available in current session
+if (!isset($_SESSION['user_image']) && isset($conn) && isset($_SESSION['user_id'])) {
+    $uid = mysqli_real_escape_string($conn, $_SESSION['user_id']);
+    $u_query = mysqli_query($conn, "SELECT profile_image FROM Users WHERE id = '$uid'");
+    if ($u_query && $u_row = mysqli_fetch_assoc($u_query)) {
+        $_SESSION['user_image'] = $u_row['profile_image'];
+    }
+}
+
+// Global Notification Queries for nav.php
+if (isset($conn)) {
+    // Check low stock count
+    $nav_low_stock_query = mysqli_query($conn, "SELECT id FROM Books WHERE stock < 3");
+    $low_stock_count = $nav_low_stock_query ? mysqli_num_rows($nav_low_stock_query) : 0;
+
+    // Check pending payments
+    $pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
+    $pending_payments_count = $pending_payments_query ? mysqli_num_rows($pending_payments_query) : 0;
+}
+?>
 <!-- TOP NAVIGATION BAR -->
 <header class="h-16 bg-yellow-300 border-b border-slate-200/80 flex items-center justify-between px-4 md:px-8 z-30 shrink-0">
     <div class="flex items-center space-x-3">
@@ -23,7 +54,6 @@
                 <div class="divide-y divide-slate-200 max-h-72 overflow-y-auto no-scrollbar">
                     <?php if (($pending_payments_count ?? 0) > 0 && isset($pending_payments_query)): ?>
                         <?php 
-                        // Reset pointer if query was iterated before
                         if (mysqli_num_rows($pending_payments_query) > 0) mysqli_data_seek($pending_payments_query, 0);
                         while($payment = mysqli_fetch_assoc($pending_payments_query)): 
                         ?>
@@ -57,8 +87,6 @@
             <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-9 h-9 rounded-full overflow-hidden bg-slate-100 border border-slate-300 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer">
                 <?php if(!empty($_SESSION['user_image']) && file_exists("../uploads/profile/" . $_SESSION['user_image'])): ?>
                     <img src="../uploads/profile/<?= htmlspecialchars($_SESSION['user_image']); ?>" alt="Admin" class="w-full h-full object-cover">
-                <?php elseif(!empty($admin_image) && file_exists("../uploads/profile/" . $admin_image)): ?>
-                    <img src="../uploads/profile/<?= htmlspecialchars($admin_image); ?>" alt="Admin" class="w-full h-full object-cover">
                 <?php else: ?>
                     <div class="w-full h-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs"><?= $admin_initial ?? 'A'; ?></div>
                 <?php endif; ?>

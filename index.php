@@ -12,7 +12,7 @@ if (isset($_SESSION['user_role']) && strtolower($_SESSION['user_role']) === 'adm
 $categories_result = $conn->query("SELECT * FROM Categories ORDER BY category_name ASC");
 $categories = $categories_result ? $categories_result->fetch_all(MYSQLI_ASSOC) : [];
 
-// Color Palette collection for dynamic Category Pils (Auto-assigned per Category)
+// Color Palette collection for dynamic Category Pills (Auto-assigned per Category)
 $category_color_palette = [
     ['bg' => 'bg-emerald-50', 'text' => 'text-emerald-700', 'border' => 'border-emerald-200', 'dot' => 'bg-emerald-500', 'hover' => 'hover:bg-emerald-100'],
     ['bg' => 'bg-blue-50',    'text' => 'text-blue-700',    'border' => 'border-blue-200',    'dot' => 'bg-blue-500',    'hover' => 'hover:bg-blue-100'],
@@ -28,8 +28,10 @@ $category_color_palette = [
 
 // 2. Capture incoming dynamic URL request filter parameters
 $filter_category_id = isset($_GET['cat_id']) ? intval($_GET['cat_id']) : 0;
+$filter_author = isset($_GET['author']) ? trim($_GET['author']) : '';
 $view_all_type = isset($_GET['view_all']) ? $_GET['view_all'] : '';
 $search_query = isset($_GET['search']) ? trim($_GET['search']) : '';
+
 
 // Base Query with standard table JOIN mapping
 $base_sql = "SELECT Books.*, Categories.category_name FROM Books LEFT JOIN Categories ON Books.category_id = Categories.id";
@@ -45,6 +47,15 @@ if (!empty($search_query)) {
     $stmt->execute();
     $display_books = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $page_title = "🔎 Search Results for: '" . htmlspecialchars($search_query) . "'";
+    $is_filtered = true;
+
+    } elseif (!empty($filter_author)) {
+    // Filter specifically by selected author name from dropdown
+    $stmt = $conn->prepare("$base_sql WHERE Books.author = ? ORDER BY Books.id DESC");
+    $stmt->bind_param("s", $filter_author);
+    $stmt->execute();
+    $display_books = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $page_title = "✍️ Author - " . htmlspecialchars($filter_author);
     $is_filtered = true;
 } elseif ($filter_category_id > 0) {
     $stmt = $conn->prepare("$base_sql WHERE Books.category_id = ? ORDER BY Books.id DESC");
@@ -153,10 +164,12 @@ if (!empty($search_query)) {
 
         body {
             background-color: #ffffff;
-            /* White Background */
             font-family: 'Plus Jakarta Sans', sans-serif;
             overflow-x: hidden;
         }
+
+        /* Visible Modern Thin Scrollbar Implementation */
+        
 
         /* Modernized Elegant Hero Banner */
         .hero {
@@ -265,6 +278,7 @@ if (!empty($search_query)) {
             align-items: center;
             perspective: 1000px;
             cursor: pointer;
+            text-decoration: none;
         }
 
         .book-cover-wrapper {
@@ -274,6 +288,8 @@ if (!empty($search_query)) {
             align-items: flex-end;
             justify-content: center;
             position: relative;
+            transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            will-change: transform;
         }
 
         /* Immersive Ultra Realistic 3D book properties styling */
@@ -297,9 +313,13 @@ if (!empty($search_query)) {
             transform: rotateY(-13deg) rotateZ(0.8deg);
         }
 
-        /* Unified Premium Hover state elevations */
+        /* Unified Premium Hover state elevations without jitter/flicker */
+        .book-item:hover .book-cover-wrapper {
+            transform: translateY(-14px);
+        }
+
         .book-item:hover img {
-            transform: rotateY(0deg) rotateZ(0deg) translateY(-14px) scale(1.03) !important;
+            transform: rotateY(0deg) rotateZ(0deg) scale(1.03) !important;
             filter: drop-shadow(-2px 18px 14px rgba(15, 23, 42, 0.3));
         }
 
@@ -371,11 +391,16 @@ if (!empty($search_query)) {
         <p class="mt-4 text-xs md:text-sm text-slate-200 max-w-xl whitespace-nowrap overflow-hidden text-ellipsis bg-slate-900/40 backdrop-blur-sm px-4 py-1.5 rounded-full font-medium shadow-sm">
             သင့်ဘဝကို မြှင့်တင်ပေးမယ့် စာကောင်းပေမွန်များကို တစ်နေရာတည်းမှာ ရရှိနိုင်ပါသည်
         </p>
+        <!-- Learn More Action Button linking to books.php -->
+        <a href="books.php" class="mt-5 inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-xs sm:text-sm px-6 py-2.5 rounded-full shadow-lg hover:shadow-amber-500/30 transition-all duration-300 transform hover:-translate-y-0.5 active:scale-95">
+            <span>Learn More</span>
+            <i class="fa-solid fa-arrow-right text-xs"></i>
+        </a>
     </div>
 
     <!-- Category Pills Navigation Section -->
     <div class="max-w-[850px] mx-auto px-4 sm:px-6 mt-8 sm:mt-10 mb-6">
-        <div class="flex flex-wrap gap-2 sm:gap-2.5 max-h-[160px] overflow-y-auto pr-1">
+        <div class="flex flex-wrap gap-2 sm:gap-2.5 max-h-[160px] overflow-y-auto pr-2 py-1">
             <?php if (!empty($categories)): foreach ($categories as $idx => $cat):
                     $is_active = ($filter_category_id === intval($cat['id']));
 
@@ -402,6 +427,7 @@ if (!empty($search_query)) {
         </div>
     </div>
 
+   
     <!-- Main Content Container Section -->
     <main class="container mx-auto px-4 sm:px-6 my-6 sm:my-10">
 
@@ -480,8 +506,8 @@ if (!empty($search_query)) {
                                 <div class="book-cover-wrapper">
                                     <img src="uploads/<?= htmlspecialchars($book['book_image'] ?: 'default_cover.png'); ?>" alt="Cover">
                                 </div>
-                                <!-- Glassmorphism Star Badge (Exact Match with Image Inspect) -->
-                                <div class="text-yellow-500 text-[10px] z-20 flex gap-0.5 shadow-md bg-white/20 backdrop-blur-sm px-2 py-1.5 rounded-full -mt-4 border border-slate-100">
+                                <!-- Glassmorphism Star Badge -->
+                                <div class="text-yellow-500 text-[10px] z-20 flex gap-0.5 shadow-md bg-white/20 backdrop-blur-sm px-2 py-1.5 rounded-full -mt-4 border border-slate-100 pointer-events-none">
                                     <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
                                 </div>
                             </a>

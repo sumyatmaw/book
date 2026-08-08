@@ -51,17 +51,8 @@ CREATE TABLE `Payment`(
     `transaction_ref` VARCHAR(255) NOT NULL,
     `payment_slip` VARCHAR(255) NOT NULL
 );
-CREATE TABLE `Delivery`(
-    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    `payment_id` INT NOT NULL,
-    `receiver_name` VARCHAR(255) NOT NULL,
-    `receiver_phone` VARCHAR(255) NOT NULL,
-    `address_details` TEXT NOT NULL,
-    `city` VARCHAR(255) NOT NULL,
-    `delivery_status` ENUM('pending','shipping','delivered') NOT NULL DEFAULT 'pending',
-    `delivery_cost` DECIMAL(8, 2) NOT NULL,
-    `shipped_at` TIMESTAMP NOT NULL
-);
+
+
 CREATE TABLE `Ratings`(
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     `user_id` INT NOT NULL,
@@ -86,8 +77,7 @@ CREATE TABLE `Order_item`(
     `quantity` INT NOT NULL,
     `price` DECIMAL(8, 2) NOT NULL
 );
-ALTER TABLE
-    `Delivery` ADD CONSTRAINT `delivery_payment_id_foreign` FOREIGN KEY(`payment_id`) REFERENCES `Payment`(`id`);
+
 ALTER TABLE
     `Ratings` ADD CONSTRAINT `ratings_user_id_foreign` FOREIGN KEY(`user_id`) REFERENCES `Users`(`id`);
 ALTER TABLE

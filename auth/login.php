@@ -54,59 +54,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
 
             /* ---------------------------------------------------------- */
-            /* Look up the email in the Users table                        */
+            /* Look up the email in the users table                        */
             /* ---------------------------------------------------------- */
-            $stmt = $conn->prepare(
-                'SELECT id, name, email, password, role FROM Users WHERE email = ? LIMIT 1'
-            );
-            $stmt->bind_param('s', $email);
-            $stmt->execute();
-            $result = $stmt->get_result();
+            if (isset($conn) && $conn instanceof mysqli) {
+                $stmt = $conn->prepare(
+                    'SELECT id, name, email, password, role FROM users WHERE email = ? LIMIT 1'
+                );
+                if ($stmt) {
+                    $stmt->bind_param('s', $email);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
 
-            if ($result->num_rows === 0) {
-                /* Email does not exist in the database */
-                $error = 'No account was found with this email address. Please register before logging in.';
-            } else {
-                $row = $result->fetch_assoc();
-
-                if (!password_verify($password, $row['password'])) {
-                    /* Email exists but password is wrong */
-                    $error = 'Incorrect password. Please try again.';
-                } else {
-                    /* -------------------------------------------------- */
-                    /* Credentials are correct — create session            */
-                    /* -------------------------------------------------- */
-                    session_regenerate_id(true);
-
-                    $_SESSION['user_id']    = $row['id'];
-                    $_SESSION['user_name']  = $row['name'];
-                    $_SESSION['user_role']  = $row['role'];
-                    $_SESSION['user_email'] = $row['email'];
-
-                    /* Remember Me — 30-day cookie */
-                    if ($remember) {
-                        $cookie_name = $row['role'] === 'admin' ? 'remember_admin' : 'remember_user';
-                        setcookie($cookie_name, bin2hex(random_bytes(16)), time() + 86400 * 30, '/');
-                    }
-
-                    /* -------------------------------------------------- */
-                    /* Redirect based on role                               */
-                    /* -------------------------------------------------- */
-                    if ($row['role'] === 'admin') {
-                        header('Location: ../admin/dashboard.php');
-                        exit();
+                    if ($result->num_rows === 0) {
+                        /* Email does not exist in database */
+                        $error = 'No account was found with this email address. Please register before logging in.';
                     } else {
-                        header('Location: ../index.php');
-                        exit();
-                    }
-                }
-            }
+                        $row = $result->fetch_assoc();
 
-            $stmt->close();
+                        if (!password_verify($password, $row['password'])) {
+                            /* Email exists but password is incorrect */
+                            $error = 'Incorrect password. Please try again.';
+                        } else {
+                            /* -------------------------------------------------- */
+                            /* Credentials correct — regenerate session ID       */
+                            /* -------------------------------------------------- */
+                            session_regenerate_id(true);
+
+                            $_SESSION['user_id']    = $row['id'];
+                            $_SESSION['user_name']  = $row['name'];
+                            $_SESSION['user_role']  = $row['role'];
+                            $_SESSION['user_email'] = $row['email'];
+
+                            /* Remember Me — 30-day cookie setup */
+                            if ($remember) {
+                                $cookie_name = $row['role'] === 'admin' ? 'remember_admin' : 'remember_user';
+                                setcookie($cookie_name, bin2hex(random_bytes(16)), time() + 86400 * 30, '/', '', false, true);
+                            }
+
+                            /* Redirect according to user role */
+                            if ($row['role'] === 'admin') {
+                                header('Location: ../admin/dashboard.php');
+                                exit();
+                            } else {
+                                header('Location: ../index.php');
+                                exit();
+                            }
+                        }
+                    }
+                    $stmt->close();
+                } else {
+                    $error = 'Database query preparation failed.';
+                }
+            } else {
+                $error = 'Database connection failed.';
+            }
         }
     }
 
-    /* Regenerate CSRF token after POST to prevent replay */
+    /* Regenerate CSRF token after POST request to prevent replay attacks */
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 ?>
@@ -119,25 +124,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Smooth page load */
+        /* Smooth page loading animation */
         .login-card { animation: slideUp .4s ease-out both; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Password strength indicator */
-        .strength-bar { transition: width .3s ease, background-color .3s ease; }
-
-        /* Checkbox custom styling */
+        /* Custom styling for remember checkbox */
         .remember-check { accent-color: #f59e0b; }
     </style>
 </head>
-<body class="bg-slate-200  min-h-screen flex items-center justify-center font-sans p-4">
+<body class="bg-slate-200 min-h-screen flex items-center justify-center font-sans p-4 md:p-6">
 
-<main class="login-card bg-white rounded-3xl shadow-[0_25px_60px_rgba(180,130,50,0.12)] overflow-hidden max-w-4xl w-full grid md:grid-cols-2 border border-[#eae3d2]">
+<main class="login-card bg-white rounded-3xl shadow-[0_25px_60px_rgba(180,130,50,0.12)] overflow-hidden max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 border border-[#eae3d2]">
 
     <!-- ============================================================ -->
     <!-- LEFT PANEL — Branded visual side                              -->
     <!-- ============================================================ -->
-    <div class="relative bg-amber-900 text-white p-10 md:p-12 flex flex-col justify-between min-h-[320px] md:min-h-[540px] overflow-hidden">
+    <div class="relative bg-amber-900 text-white p-8 sm:p-10 md:p-12 flex flex-col justify-between min-h-[280px] sm:min-h-[320px] md:min-h-[540px] overflow-hidden">
         <!-- Background image -->
         <div class="absolute inset-0 bg-cover bg-center transition-transform duration-[2s] hover:scale-105"
              style="background-image: url('https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&q=80&w=800');"></div>
@@ -146,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <!-- Branding -->
         <div class="relative z-10">
-            <a href="../index.php" class="inline-flex items-center gap-2 bg-amber-500/90 backdrop-blur-sm px-4 py-2 rounded-full font-black text-sm text-slate-900 shadow-lg border border-amber-400/50">
+            <a href="../index.php" class="inline-flex items-center gap-2 bg-amber-500/90 backdrop-blur-sm px-4 py-2 rounded-full font-black text-sm text-slate-900 shadow-lg border border-amber-400/50 hover:bg-amber-500 transition-colors">
                 <i class="fa-solid fa-book-open"></i> OnlineBookShop
             </a>
         </div>
@@ -165,12 +167,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- ============================================================ -->
     <!-- RIGHT PANEL — Login form                                      -->
     <!-- ============================================================ -->
-    <div class="p-8 md:p-12 flex flex-col justify-center bg-[#faf8f2]">
+    <div class="p-6 sm:p-8 md:p-12 flex flex-col justify-center bg-[#faf8f2]">
 
         <!-- Header -->
         <div class="mb-7 text-center md:text-left">
-            <h2 class="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">မင်္ဂလာပါ</h2>
-            <p class="text-xs text-amber-700 font-semibold mt-1.5">အကောင့်ထဲသို့ လော့ဂ်အင်ဝင်ပါ</p>
+            <h2 class="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">Welcome Back</h2>
+            <p class="text-xs text-amber-700 font-semibold mt-1.5">Sign in to your account</p>
         </div>
 
         <!-- Success message (from registration) -->
@@ -196,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <!-- Email field -->
             <div>
-                <label for="email" class="block text-xs font-bold text-slate-700 mb-2">အီးမေးလ် (Email)</label>
+                <label for="email" class="block text-xs font-bold text-slate-700 mb-2">Email</label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-amber-700/40 pointer-events-none">
                         <i class="fa-solid fa-envelope text-xs"></i>
@@ -205,14 +207,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            value="<?= htmlspecialchars($email ?? '') ?>"
                            placeholder="you@example.com"
                            required autocomplete="email"
-                           class="w-full pl-10 pr-4 py-3 text-sm rounded-xl border border-amber-200/60 bg-white text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all duration-200 shadow-sm hover:border-amber-300">
+                           class="w-full pl-10 pr-4 py-3 text-sm rounded-xl border border-amber-200 bg-white text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-amber-500 transition-colors duration-150 shadow-sm hover:border-amber-300">
                 </div>
                 <p id="emailError" class="hidden text-red-500 text-[11px] mt-1 font-semibold"></p>
             </div>
 
             <!-- Password field with show/hide toggle -->
             <div>
-                <label for="password" class="block text-xs font-bold text-slate-700 mb-2">စကားဝှက် (Password)</label>
+                <label for="password" class="block text-xs font-bold text-slate-700 mb-2">Password</label>
                 <div class="relative">
                     <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-amber-700/40 pointer-events-none">
                         <i class="fa-solid fa-lock text-xs"></i>
@@ -220,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="password" id="password" name="password"
                            placeholder="Enter your password"
                            required autocomplete="current-password"
-                           class="w-full pl-10 pr-12 py-3 text-sm rounded-xl border border-amber-200/60 bg-white text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-400 transition-all duration-200 shadow-sm hover:border-amber-300">
+                           class="w-full pl-10 pr-12 py-3 text-sm rounded-xl border border-amber-200 bg-white text-slate-800 placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-amber-500 transition-colors duration-150 shadow-sm hover:border-amber-300">
                     <!-- Show/Hide toggle button -->
                     <button type="button" id="togglePassword"
                             class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-amber-700/50 hover:text-amber-700 transition-colors duration-200 focus:outline-none"
@@ -246,7 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit" id="submitBtn"
                     class="w-full bg-[#f0b90b] hover:bg-amber-500 text-slate-900 font-black py-3 px-4 rounded-xl shadow-[0_5px_15px_rgba(240,185,11,0.3)] hover:shadow-[0_8px_25px_rgba(240,185,11,0.4)] transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] text-sm mt-2 flex items-center justify-center gap-2">
                 <i class="fa-solid fa-right-to-bracket"></i>
-                <span id="btnText">ရှေ့သို့သွားမည်</span>
+                <span id="btnText">Sign In</span>
                 <!-- Spinner (hidden by default) -->
                 <svg id="btnSpinner" class="hidden animate-spin h-4 w-4 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -264,7 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </main>
 
 <!-- ================================================================ -->
-<!-- Vanilla JavaScript — no frameworks                                -->
+<!-- Vanilla JavaScript — form logic                                   -->
 <!-- ================================================================ -->
 <script>
 (function () {
@@ -275,17 +277,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     var toggleBtn     = document.getElementById('togglePassword');
     var eyeIcon       = document.getElementById('eyeIcon');
 
-    toggleBtn.addEventListener('click', function () {
-        var isPassword = passwordInput.type === 'password';
-        passwordInput.type = isPassword ? 'text' : 'password';
-        eyeIcon.classList.toggle('fa-eye');
-        eyeIcon.classList.toggle('fa-eye-slash');
-    });
+    if (toggleBtn && passwordInput && eyeIcon) {
+        toggleBtn.addEventListener('click', function () {
+            var isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            eyeIcon.classList.toggle('fa-eye');
+            eyeIcon.classList.toggle('fa-eye-slash');
+        });
+    }
 
     /* ---- Client-side form validation ---- */
-    var form    = document.getElementById('loginForm');
-    var emailIn = document.getElementById('email');
-    var passIn  = document.getElementById('password');
+    var form      = document.getElementById('loginForm');
+    var emailIn   = document.getElementById('email');
+    var passIn    = document.getElementById('password');
     var emailErr  = document.getElementById('emailError');
     var passErr   = document.getElementById('passwordError');
     var submitBtn = document.getElementById('submitBtn');
@@ -293,69 +297,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     var btnSpin   = document.getElementById('btnSpinner');
 
     function showError(el, msg) {
-        el.textContent = msg;
-        el.classList.remove('hidden');
+        if (el) {
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
     }
     function hideError(el) {
-        el.classList.add('hidden');
-        el.textContent = '';
+        if (el) {
+            el.classList.add('hidden');
+            el.textContent = '';
+        }
     }
 
-    /* Live validation on blur */
-    emailIn.addEventListener('input', function () {
-        if (emailIn.value.trim() === '') {
-            showError(emailErr, 'Email is required.');
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn.value.trim())) {
-            showError(emailErr, 'Please enter a valid email.');
-        } else {
-            hideError(emailErr);
-        }
-    });
-
-    passIn.addEventListener('input', function () {
-        if (passIn.value === '') {
-            showError(passErr, 'Password is required.');
-        } else if (passIn.value.length < 6) {
-            showError(passErr, 'Password must be at least 6 characters.');
-        } else {
-            hideError(passErr);
-        }
-    });
-
     /* Clear errors while typing */
-    emailIn.addEventListener('input', function () { hideError(emailErr); });
-    passIn.addEventListener('input',  function () { hideError(passErr);  });
+    if (emailIn) {
+        emailIn.addEventListener('input', function () { hideError(emailErr); });
+    }
+    if (passIn) {
+        passIn.addEventListener('input', function () { hideError(passErr); });
+    }
 
-    /* Submit validation + spinner */
-    form.addEventListener('submit', function (e) {
-        var valid = true;
+    /* Submit validation + spinner toggle */
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            var valid = true;
 
-        if (emailIn.value.trim() === '' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn.value.trim())) {
-            showError(emailErr, 'Please enter a valid email.');
-            valid = false;
-        }
-        if (passIn.value === '' || passIn.value.length < 6) {
-            showError(passErr, 'Password must be at least 6 characters.');
-            valid = false;
-        }
+            if (!emailIn || emailIn.value.trim() === '' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn.value.trim())) {
+                showError(emailErr, 'Please enter a valid email.');
+                valid = false;
+            }
+            if (!passIn || passIn.value === '' || passIn.value.length < 6) {
+                showError(passErr, 'Password must be at least 6 characters.');
+                valid = false;
+            }
 
-        if (!valid) {
-            e.preventDefault();
-            return;
-        }
+            if (!valid) {
+                e.preventDefault();
+                return;
+            }
 
-        /* Show loading spinner */
-        btnText.textContent = 'Signing in...';
-        btnSpin.classList.remove('hidden');
-        submitBtn.disabled = true;
-    });
-
-    /* ---- Close dropdowns when clicking outside (for header consistency) ---- */
-    document.addEventListener('click', function (e) {
-        document.querySelectorAll('.cat-dropdown.open').forEach(function (dd) {
-            if (!dd.contains(e.target)) dd.classList.remove('open');
+            /* Show loading state on button */
+            if (btnText) btnText.textContent = 'Signing in...';
+            if (btnSpin) btnSpin.classList.remove('hidden');
+            if (submitBtn) submitBtn.disabled = true;
         });
-    });
+    }
 })();
 </script>
 </body>

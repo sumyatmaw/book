@@ -107,7 +107,7 @@ if (isset($_GET['edit_id'])) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 
 <head>
     <meta charset="UTF-8">
@@ -115,35 +115,60 @@ if (isset($_GET['edit_id'])) {
     <title>Manage Categories - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        /* Single Scrollbar Styles */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
         }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Mobile Sidebar positioning */
+        @media (max-width: 767px) {
+            #sidebar {
+                position: fixed;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                z-index: 50;
+            }
         }
     </style>
 </head>
 
-<body class="bg-gray-300 font-sans antialiased text-slate-800">
+<body class="min-h-full bg-slate-100 font-sans antialiased text-slate-800">
 
-    <div class="flex h-screen overflow-hidden">
+    <div class="flex min-h-screen w-full">
 
         <!-- ================= DYNAMIC SIDEBAR INCLUDE ================= -->
         <?php include '../auth/sidebar.php'; ?>
 
-        <div class="flex-1 flex flex-col overflow-hidden w-full">
+        <!-- MAIN CONTENT AREA (Single Scroll Environment) -->
+        <div class="flex-1 flex flex-col min-w-0 w-full">
 
-            <!-- Dynamic Header Navigation Component Include -->
-            <?php 
-                $page_title = "Categories Management";
-                include '../auth/nav.php'; 
-            ?>
+            <!-- Dynamic Header Navigation Component -->
+            <header class="w-full shrink-0 z-10">
+                <?php 
+                    $page_title = "Categories Management";
+                    include '../auth/nav.php'; 
+                ?>
+            </header>
 
             <!-- MAIN CANVAS -->
-            <main class="flex-1 overflow-y-auto p-4 md:p-8 max-w-[1600px] w-full mx-auto">
+            <main class="flex-1 p-4 md:p-8 max-w-[1600px] w-full mx-auto">
 
                 <!-- Page Header Status Block -->
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
@@ -187,7 +212,7 @@ if (isset($_GET['edit_id'])) {
                             <?php endif; ?>
 
                             <div>
-                                <label class="block text-xs font-bold text-white uppercase tracking-wider mb-1">Category Name</label>
+                                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Category Name</label>
                                 <input type="text" name="category_name"
                                     value="<?= $editCategory ? htmlspecialchars($editCategory['category_name']) : ''; ?>"
                                     required
@@ -197,7 +222,7 @@ if (isset($_GET['edit_id'])) {
                             <div class="pt-2 flex gap-2">
                                 <?php if ($editCategory): ?>
                                     <button type="submit" name="update_category"
-                                        class="flex-1 bg-gray-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold py-2.5 shadow-sm shadow-amber-500/10 transition cursor-pointer">
+                                        class="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold py-2.5 shadow-sm shadow-amber-500/10 transition cursor-pointer">
                                         Save Update
                                     </button>
                                     <a href="categories.php"
@@ -206,7 +231,7 @@ if (isset($_GET['edit_id'])) {
                                     </a>
                                 <?php else: ?>
                                     <button type="submit" name="add_category"
-                                        class="w-full bg-blue-500 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs py-2.5 shadow-sm shadow-indigo-600/10 transition cursor-pointer">
+                                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs py-2.5 shadow-sm shadow-indigo-600/10 transition cursor-pointer">
                                         + Add Category
                                     </button>
                                 <?php endif; ?>
@@ -215,59 +240,50 @@ if (isset($_GET['edit_id'])) {
                     </div>
 
                     <!-- Database Live Registry Table Layout -->
-                    <div class="w-full lg:flex-1 bg-gray-500 rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+                    <div class="w-full lg:flex-1 bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
 
-                        <!-- Tablet and Desktop Table Canvas Interface -->
-                        <!-- <div class="hidden sm:block">
-                            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                                <h3 class="font-bold text-white flex items-center text-sm">
-                                    <i class="fa-solid fa-list text-white mr-2"></i> Catalog Registry Stack
-                                </h3>
-                            </div> -->
-
-                            <?php if (!empty($allCategories)): ?>
-                                <div class="overflow-x-auto w-full no-scrollbar">
-                                    <table class="w-full text-left border-collapse min-w-[500px]">
-                                        <thead>
-                                            <tr class="bg-white text-slate-900 text-[11px] font-bold uppercase tracking-wider border-b border-slate-100">
-                                                <th class="px-6 py-3.5 w-16">No</th>
-                                                <th class="px-6 py-3.5">Category Name</th>
-                                                <th class="px-6 py-3.5 text-center">Actions</th>
+                        <?php if (!empty($allCategories)): ?>
+                            <div class="overflow-x-auto w-full">
+                                <table class="w-full text-left border-collapse min-w-[500px]">
+                                    <thead>
+                                        <tr class="bg-slate-50 text-slate-900 text-[11px] font-bold uppercase tracking-wider border-b border-slate-100">
+                                            <th class="px-6 py-3.5 w-16">No</th>
+                                            <th class="px-6 py-3.5">Category Name</th>
+                                            <th class="px-6 py-3.5 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 text-xs text-slate-900 font-medium">
+                                        <?php $no = 1;
+                                        foreach ($allCategories as $category): ?>
+                                            <tr class="bg-white transition hover:bg-slate-50/80 <?= $editCategory && $editCategory['id'] == $category['id'] ? 'bg-amber-50/50' : ''; ?>">
+                                                <td class="px-6 py-3.5 text-slate-900 font-medium"><?= $no++; ?></td>
+                                                <td class="px-6 py-3.5 font-bold text-slate-900 text-sm"><?= htmlspecialchars($category['category_name']); ?></td>
+                                                <td class="px-6 py-3.5 text-center">
+                                                    <div class="flex items-center justify-center space-x-2.5">
+                                                        <a href="categories.php?edit_id=<?= $category['id']; ?>"
+                                                            class="inline-flex items-center justify-center px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white border border-blue-200/40 rounded-xl font-bold transition">
+                                                            <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
+                                                        </a>
+                                                        <form action="categories.php" method="POST" onsubmit="return confirm('Are you sure you want to completely remove this category item?');" class="inline">
+                                                            <input type="hidden" name="category_id" value="<?= $category['id']; ?>">
+                                                            <button type="submit" name="delete_category"
+                                                                class="inline-flex items-center justify-center px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white border border-red-200/40 rounded-xl font-bold transition cursor-pointer">
+                                                                <i class="fa-solid fa-trash-can mr-1"></i> Delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100 text-xs text-slate-900 font-medium">
-                                            <?php $no = 1;
-                                            foreach ($allCategories as $category): ?>
-                                                <tr class="bg-white transition <?= $editCategory && $editCategory['id'] == $category['id'] ? 'bg-amber-50/50' : ''; ?>">
-                                                    <td class="px-6 py-3.5 text-slate-900 font-medium"><?= $no++; ?></td>
-                                                    <td class="px-6 py-3.5 font-bold text-slate-900 text-sm"><?= htmlspecialchars($category['category_name']); ?></td>
-                                                    <td class="px-6 py-3.5 text-center">
-                                                        <div class="flex items-center justify-center space-x-2.5">
-                                                            <a href="categories.php?edit_id=<?= $category['id']; ?>"
-                                                                class="inline-flex items-center justify-center px-2.5 py-1.5 bg-blue-500  text-white border border-blue-200/40 rounded-xl font-bold transition">
-                                                                <i class="fa-solid fa-pen-to-square mr-1"></i> Edit
-                                                            </a>
-                                                            <form action="categories.php" method="POST" onsubmit="return confirm('Are you sure you want to completely remove this category item?');" class="inline">
-                                                                <input type="hidden" name="category_id" value="<?= $category['id']; ?>">
-                                                                <button type="submit" name="delete_category"
-                                                                    class="inline-flex items-center justify-center px-2.5 py-1.5 bg-red-500 text-white border border-red-200/40 rounded-xl font-bold transition cursor-pointer">
-                                                                    <i class="fa-solid fa-trash-can mr-1"></i> Delete
-                                                                </button>
-                                                            </form>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            <?php else: ?>
-                                <div class="py-16 text-center text-slate-900 font-semibold">
-                                    <i class="fa-solid fa-layer-group text-4xl text-gray-200 mb-3"></i>
-                                    <p>No categories discovered.</p>
-                                </div>
-                            <?php endif; ?>
-                        </div>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <div class="py-16 text-center text-slate-900 font-semibold">
+                                <i class="fa-solid fa-layer-group text-4xl text-gray-200 mb-3"></i>
+                                <p>No categories discovered.</p>
+                            </div>
+                        <?php endif; ?>
 
                         <!-- Mobile Adaptive Cards Screen Rendering Layout -->
                         <div class="sm:hidden p-4 space-y-3">
@@ -312,35 +328,45 @@ if (isset($_GET['edit_id'])) {
         </div>
     </div>
 
+    <!-- UI Scripts -->
     <script>
-        // Sidebar Toggle
+        // Sidebar Toggle for Mobile
         function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) {
+                sidebar.classList.toggle('-translate-x-full');
+            }
         }
 
         // Notifications Dropdown Toggle
         function toggleNotificationDropdown(e) {
             e.stopPropagation();
-            document.getElementById('notiDropdown').classList.toggle('hidden');
-            document.getElementById('profileDropdown').classList.add('hidden');
+            const notiDropdown = document.getElementById('notiDropdown');
+            const profileDropdown = document.getElementById('profileDropdown');
+            if (notiDropdown) notiDropdown.classList.toggle('hidden');
+            if (profileDropdown) profileDropdown.classList.add('hidden');
         }
 
         // Profile Menu Dropdown Toggle
         function toggleProfileDropdown(e) {
             e.stopPropagation();
-            document.getElementById('profileDropdown').classList.toggle('hidden');
-            document.getElementById('notiDropdown').classList.add('hidden');
+            const profileDropdown = document.getElementById('profileDropdown');
+            const notiDropdown = document.getElementById('notiDropdown');
+            if (profileDropdown) profileDropdown.classList.toggle('hidden');
+            if (notiDropdown) notiDropdown.classList.add('hidden');
         }
 
-        // Window Dynamic Blur and Target Out-Click Dismissal
+        // Window Dismissal
         window.addEventListener('click', function(e) {
             const notiDropdown = document.getElementById('notiDropdown');
             const profileDropdown = document.getElementById('profileDropdown');
+            const notiBtn = document.getElementById('notiBtn');
+            const profileBtn = document.getElementById('profileBtn');
 
-            if (notiDropdown && !notiDropdown.contains(e.target) && !document.getElementById('notiBtn').contains(e.target)) {
+            if (notiDropdown && !notiDropdown.contains(e.target) && (!notiBtn || !notiBtn.contains(e.target))) {
                 notiDropdown.classList.add('hidden');
             }
-            if (profileDropdown && !profileDropdown.contains(e.target) && !document.getElementById('profileBtn').contains(e.target)) {
+            if (profileDropdown && !profileDropdown.contains(e.target) && (!profileBtn || !profileBtn.contains(e.target))) {
                 profileDropdown.classList.add('hidden');
             }
         });

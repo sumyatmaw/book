@@ -103,7 +103,7 @@ $currentPage = 'books';
                     <div class="bg-white p-3 sm:p-4 rounded-2xl shadow-xs border border-gray-100 flex flex-col justify-between hover:shadow-md transition duration-300 group relative">
                         
                         <!-- Book Cover Container with Stock Overlay Layout -->
-                        <div class="relative overflow-hidden rounded-xl mb-3 sm:mb-4 bg-gray-50 aspect-[3/4]">
+                        <div class="relative overflow-hidden rounded-xl mb-3 sm:mb-4 bg-gray-50 aspect-[1/1]">
                             <img src="uploads/<?= htmlspecialchars($book['book_image'] ?? 'default.jpg'); ?>" 
                                  class="w-full h-full object-cover group-hover:scale-105 transition duration-300 <?= $is_out_of_stock ? 'opacity-40 blur-[1px]' : ''; ?>" 
                                  alt="<?= htmlspecialchars($book['title']); ?>">
@@ -130,7 +130,7 @@ $currentPage = 'books';
 
                         <!-- Price and Action Call-to-Action Buttons -->
                         <div class="mt-auto pt-2">
-                            <p class="text-rose-600 font-black text-xs sm:text-sm mb-2.5">
+                            <p class="text-slate-900 font-black text-xs sm:text-sm mb-2.5">
                                 <?= number_format($book['price']); ?> ကျပ်
                             </p>
                             

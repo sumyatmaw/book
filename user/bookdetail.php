@@ -173,7 +173,7 @@ $review_stmt->close();
         input[type=number] { -moz-appearance: textfield; }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex flex-col font-sans text-slate-800 antialiased relative">
+<body class="bg-gray-300 min-h-screen flex flex-col font-sans text-slate-900 antialiased relative">
 
     <?php include '../auth/header.php'; ?>
 
@@ -195,7 +195,7 @@ $review_stmt->close();
 
     <div class="max-w-5xl mx-auto py-6 sm:py-8 px-4 flex-1 w-full">
 
-        <a href="../user/userdashboard.php" class="inline-flex items-center gap-2 text-slate-500 hover:text-blue-600 font-medium text-sm transition mb-6 group">
+        <a href="../books.php" class="inline-flex items-center gap-2 text-slate-900 font-medium text-sm transition mb-6 group">
             <i class="fa-solid fa-arrow-left transition-transform group-hover:-translate-x-1"></i> Back to Catalog
         </a>
 
@@ -209,9 +209,9 @@ $review_stmt->close();
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6 md:p-8 grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
             
             <div class="col-span-1 md:col-span-5 flex flex-col justify-start max-w-sm mx-auto md:max-w-none w-full">
-                <div class="overflow-hidden rounded-xl bg-slate-100 shadow-md border border-slate-100 group aspect-[3/4]">
+                <div class="overflow-hidden rounded-xl bg-white  group aspect-[3/4]">
                     <img src="../uploads/<?= htmlspecialchars($book['book_image']); ?>"
-                         class="w-full h-full object-cover transition duration-500 group-hover:scale-105" alt="Book Cover">
+                         class="w-full h-full object-cover transition duration-500 " alt="Book Cover">
                 </div>
             </div>
 
@@ -230,7 +230,7 @@ $review_stmt->close();
                     </p>
 
                     <div class="flex items-baseline gap-2 mb-4">
-                        <span class="text-2xl sm:text-3xl font-black text-blue-600"><?= number_format($book['price']); ?></span>
+                        <span class="text-2xl sm:text-sm font-black text-slate-900"><?= number_format($book['price']); ?></span>
                         <span class="text-sm font-bold text-slate-400">ကျပ်</span>
                     </div>
 
@@ -431,7 +431,7 @@ $review_stmt->close();
 
                             <?php if (!empty($r['comment'])): ?>
                                 <p class="text-slate-600 text-sm leading-relaxed pl-1 bg-slate-50/40 p-3 rounded-lg border border-slate-100/50 italic mb-3 break-words">
-                                    " <?= htmlspecialchars($r['comment']); ?> "
+                                     <?= htmlspecialchars($r['comment']); ?> 
                                 </p>
                             <?php endif; ?>
 

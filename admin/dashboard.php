@@ -49,14 +49,8 @@ $total_customers = $purchased_customers + $registered_viewers;
 $order_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Orders");
 $total_orders = $order_query ? mysqli_fetch_assoc($order_query)['total'] : 0;
 
-$del_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Delivery WHERE delivery_status = 'pending'");
-$pending_deliveries = $del_query ? mysqli_fetch_assoc($del_query)['total'] : 0;
-
 $low_stock_query = mysqli_query($conn, "SELECT id, title, stock FROM Books WHERE stock < 3 ORDER BY stock ASC");
 $low_stock_count = $low_stock_query ? mysqli_num_rows($low_stock_query) : 0;
-
-$pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
-$pending_payments_count = $pending_payments_query ? mysqli_num_rows($pending_payments_query) : 0;
 
 $recent_orders_query = mysqli_query($conn, "
     SELECT o.*, u.name as customer_name 
@@ -75,15 +69,98 @@ $recent_orders_query = mysqli_query($conn, "
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
+    /* Active nav link highlight */
+    .header-nav a.active,
+    .header-nav button.active {
+        font-weight: 700;
+        color: #1e293b !important;
+    }
 
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+    /* Desktop: category dropdown opens on hover */
+    @media (min-width: 768px) {
+        .cat-dropdown:hover>.cat-dropdown-menu {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
         }
-    </style>
+    }
+
+    /* Mobile menu slide animation */
+    #mobileMenu {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-in-out;
+    }
+
+    #mobileMenu.open {
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+
+    /* Category dropdown styling */
+    .cat-dropdown-menu {
+        display: none;
+        opacity: 0;
+        transform: translateY(-2px);
+        transition: opacity 0.15s ease;
+    }
+
+    .cat-dropdown.open>.cat-dropdown-menu {
+        display: block;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* Search bar styling */
+    .header-search {
+        background-color: #ffffff !important;
+        box-shadow: none !important;
+    }
+
+    .header-search:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    .header-search::placeholder {
+        color: #94a3b8;
+    }
+
+    /* Hamburger menu button bar animation */
+    .hamburger-bar {
+        transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    /* Scrollbar တစ်ခုလုံး၏ အကျယ် (5px is perfect for small scroll) */
+    ::-webkit-scrollbar {
+        width: 5px;
+        /* ဒေါင်လိုက် scrollbar အကျယ် */
+        height: 5px;
+        /* အလျားလိုက် scrollbar အကျယ် */
+    }
+
+    /* Scrollbar နောက်ခံလမ်းကြောင်း (Track) */
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        /* နောက်ခံအရောင် */
+        border-radius: 10px;
+        /* ထောင့်ကွေး ဆွဲခြင်း */
+    }
+
+    /* ဆွဲရွှေ့ရသည့် အတုံး (Thumb) */
+    ::-webkit-scrollbar-thumb {
+        background: #888;
+        /* အတုံး၏ အရောင် */
+        border-radius: 10px;
+        /* ထောင့်ကွေး ဆွဲခြင်း */
+    }
+
+    /* Mouse ထောက်လိုက်သည့်အခါ ပြောင်းလဲမည့်အရောင် (Hover) */
+    ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+        /* FIXED: Removed the inline comment // which breaks CSS */
+    }
+</style>
 </head>
 
 <body class="bg-gray-300 font-sans antialiased text-slate-800">
@@ -93,7 +170,8 @@ $recent_orders_query = mysqli_query($conn, "
         <!-- Dynamic Sidebar Include -->
         <?php include '../auth/sidebar.php'; ?>
 
-        <div class="flex-1 flex flex-col overflow-hidden w-full bg-white">
+        <!-- Outer wrapper set to scroll from top navigation bar -->
+        <div class="flex-1 flex flex-col h-screen overflow-y-auto w-full bg-gray-300">
 
             <!-- Dynamic Header Navigation Component Include -->
             <?php
@@ -102,7 +180,81 @@ $recent_orders_query = mysqli_query($conn, "
             ?>
 
             <!-- Main Content Area -->
-            <main class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 max-w-[1600px] w-full mx-auto bg-gray-300">
+            <main class="p-4 md:p-8 space-y-6 md:space-y-8 max-w-[1600px] w-full mx-auto bg-gray-300 flex-1">
+
+                <!-- 4 Responsive Analytics Cards in Single Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                    
+                    <!-- 1. Total Revenue Card -->
+                    <div class="bg-amber-100 p-6 rounded-2xl border border-amber-200/60 flex flex-col justify-between shadow-sm hover:shadow transition group h-full">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-sm md:text-base font-bold text-amber-800 uppercase tracking-wider">Total Revenue</p>
+                                <h3 class="text-lg md:text-xl font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_revenue); ?> ကျပ်</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-white text-amber-600 group-hover:bg-amber-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm shrink-0">
+                                <i class="fa-solid fa-money-bill-wave"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Total Orders Card -->
+                    <div class="bg-blue-100 p-6 rounded-2xl border border-blue-200/60 flex flex-col justify-between shadow-sm hover:shadow transition group h-full">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-sm md:text-base font-bold text-blue-800 uppercase tracking-wider">Total Orders</p>
+                                <h3 class="text-lg md:text-xl font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_orders); ?> ခု</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-white text-blue-600 group-hover:bg-blue-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm shrink-0">
+                                <i class="fa-solid fa-cart-shopping"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Total Books & Categories Card -->
+                    <div class="bg-emerald-100 p-6 rounded-2xl border border-emerald-200/60 flex flex-col justify-between shadow-sm hover:shadow transition group h-full space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-sm md:text-base font-bold text-emerald-800 uppercase tracking-wider">Total Books</p>
+                                <h3 class="text-lg md:text-xl font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_books); ?> အုပ်</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-white text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm shrink-0">
+                                <i class="fa-solid fa-book"></i>
+                            </div>
+                        </div>
+                        <div class="pt-3 border-t border-emerald-200/80 text-xs">
+                            <div class="bg-white/80 p-2 rounded-xl border border-emerald-200 flex justify-between items-center">
+                                <span class="text-emerald-800 font-semibold">Categories</span>
+                                <span class="text-sm font-extrabold text-slate-900"><?php echo number_format($total_categories); ?> မျိုး</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Total Customers Card -->
+                    <div class="bg-slate-100 p-6 rounded-2xl border border-slate-200/80 flex flex-col justify-between shadow-sm hover:shadow transition group h-full space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="space-y-1">
+                                <p class="text-sm md:text-base font-bold text-slate-700 uppercase tracking-wider">Total Customers</p>
+                                <h3 class="text-lg md:text-xl font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_customers); ?> ယောက်</h3>
+                            </div>
+                            <div class="w-12 h-12 bg-white text-slate-700 group-hover:bg-slate-800 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm shrink-0">
+                                <i class="fa-solid fa-users"></i>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200 text-xs">
+                            <div class="bg-white p-2 rounded-xl border border-slate-200">
+                                <p class="text-slate-500 font-medium truncate">Book Purchasers</p>
+                                <p class="text-sm font-bold text-emerald-600 mt-0.5"><?php echo number_format($purchased_customers); ?> ယောက်</p>
+                            </div>
+                            <div class="bg-white p-2 rounded-xl border border-slate-200">
+                                <p class="text-slate-500 font-medium truncate">Registered Viewers</p>
+                                <p class="text-sm font-bold text-slate-700 mt-0.5"><?php echo number_format($registered_viewers); ?> ယောက်</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
 
                 <!-- Low Stock Warning Banner -->
                 <?php if ($low_stock_count > 0 && $low_stock_query): ?>
@@ -123,7 +275,7 @@ $recent_orders_query = mysqli_query($conn, "
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-amber-200/50">
                             <?php while ($low_book = mysqli_fetch_assoc($low_stock_query)): ?>
-                                <div class="bg-white  border border-amber-200/60 rounded-xl p-3 flex justify-between items-center text-xs transition">
+                                <div class="bg-white border border-amber-200/60 rounded-xl p-3 flex justify-between items-center text-xs transition">
                                     <span class="font-semibold text-slate-700 truncate max-w-[160px]"><?php echo htmlspecialchars($low_book['title']); ?></span>
                                     <span class="font-bold text-rose-600 px-2 py-0.5 bg-rose-50 border border-rose-100 rounded-md shrink-0">
                                         Only <?php echo $low_book['stock']; ?> left
@@ -133,88 +285,6 @@ $recent_orders_query = mysqli_query($conn, "
                         </div>
                     </div>
                 <?php endif; ?>
-
-                <!-- Statistics Cards Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                    <!-- 1. Total Revenue -->
-                    <div class="bg-amber-100 p-6 rounded-2xl border border-amber-200/60 flex items-center justify-between shadow-sm hover:shadow transition group">
-                        <div class="space-y-2">
-                            <p class="text-lg md:text-xl font-bold text-amber-800 uppercase tracking-wider">စုစုပေါင်း ဝင်ငွေ</p>
-                            <h3 class="text-xs md:text-sm font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_revenue); ?> ကျပ်</h3>
-                        </div>
-                        <div class="w-12 h-12 bg-white text-amber-600 group-hover:bg-amber-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm">
-                            <i class="fa-solid fa-money-bill-wave"></i>
-                        </div>
-                    </div>
-
-                    <!-- 2. Total Orders -->
-                    <div class="bg-blue-100 p-6 rounded-2xl border border-blue-200/60 flex items-center justify-between shadow-sm hover:shadow transition group">
-                        <div class="space-y-2">
-                            <p class="text-lg md:text-xl font-bold text-blue-800 uppercase tracking-wider">စုစုပေါင်း အော်ဒါအရေအတွက်</p>
-                            <h3 class="text-xs md:text-sm font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_orders); ?> ခု</h3>
-                        </div>
-                        <div class="w-12 h-12 bg-white text-blue-600 group-hover:bg-blue-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm">
-                            <i class="fa-solid fa-cart-shopping"></i>
-                        </div>
-                    </div>
-
-                    <!-- 3. Pending Deliveries -->
-                    <div class="bg-purple-100 p-6 rounded-2xl border border-purple-200/60 flex items-center justify-between shadow-sm hover:shadow transition group">
-                        <div class="space-y-2">
-                            <p class="text-xs md:text-sm font-bold text-purple-800 uppercase tracking-wider">ပို့ဆောင်ရန် ကျန်ရှိသည့် ပါဆယ်</p>
-                            <h3 class="text-lg md:text-xl font-extrabold text-slate-950 tracking-tight"><?php echo number_format($pending_deliveries); ?> ခု</h3>
-                        </div>
-                        <div class="w-12 h-12 bg-white text-purple-600 group-hover:bg-purple-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm">
-                            <i class="fa-solid fa-truck-ramp-box"></i>
-                        </div>
-                    </div>
-
-                    <!-- 4. Total Books -->
-                    <div class="bg-emerald-100 p-6 rounded-2xl border border-emerald-200/60 flex items-center justify-between shadow-sm hover:shadow transition group">
-                        <div class="space-y-2">
-                            <p class="text-lg md:text-xl font-bold text-emerald-800 uppercase tracking-wider">စုစုပေါင်း စာအုပ်</p>
-                            <h3 class="text-xs md:text-sm font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_books); ?> အုပ်</h3>
-                        </div>
-                        <div class="w-12 h-12 bg-white text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm">
-                            <i class="fa-solid fa-book"></i>
-                        </div>
-                    </div>
-
-                    <!-- 5. Categories -->
-                    <div class="bg-sky-100 p-6 rounded-2xl border border-sky-200/60 flex items-center justify-between shadow-sm hover:shadow transition group">
-                        <div class="space-y-2">
-                            <p class="text-lg md:text-xl font-bold text-sky-800 uppercase tracking-wider">စာအုပ်အမျိုးအစားများ</p>
-                            <h3 class="text-xs md:text-sm font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_categories); ?> မျိုး</h3>
-                        </div>
-                        <div class="w-12 h-12 bg-white text-sky-600 group-hover:bg-sky-500 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm">
-                            <i class="fa-solid fa-tags"></i>
-                        </div>
-                    </div>
-
-                    <!-- 6. Customers Card -->
-                    <div class="bg-slate-100 p-6 rounded-2xl border border-slate-200/80 flex flex-col justify-between shadow-sm hover:shadow transition group space-y-4">
-                        <div class="flex items-center justify-between">
-                            <div class="space-y-1">
-                                <p class="text-lg md:text-xl font-bold text-slate-700 uppercase tracking-wider">အကောင့်ဖွင့်သူစုစုပေါင်း</p>
-                                <h3 class="text-xs md:text-sm font-extrabold text-slate-950 tracking-tight"><?php echo number_format($total_customers); ?> ယောက်</h3>
-                            </div>
-                            <div class="w-12 h-12 bg-white text-slate-700 group-hover:bg-slate-800 group-hover:text-white rounded-xl flex items-center justify-center text-lg font-semibold transition-colors duration-300 shadow-sm">
-                                <i class="fa-solid fa-users"></i>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2 pt-3 border-t border-slate-200 text-xs">
-                            <div class="bg-white p-2 rounded-xl border border-slate-200">
-                                <p class="text-slate-500 font-medium">စာအုပ်ဝယ်ယူသူ</p>
-                                <p class="text-sm font-bold text-emerald-600 mt-0.5"><?php echo number_format($purchased_customers); ?> ယောက်</p>
-                            </div>
-                            <div class="bg-white p-2 rounded-xl border border-slate-200">
-                                <p class="text-slate-500 font-medium">အကောင့်ဖွင့်ကြည့်သူ</p>
-                                <p class="text-sm font-bold text-slate-700 mt-0.5"><?php echo number_format($registered_viewers); ?> ယောက်</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Recent Orders Table -->
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -274,7 +344,7 @@ $recent_orders_query = mysqli_query($conn, "
                                                 <?php echo isset($order['created_at']) ? date('d M Y, h:i A', strtotime($order['created_at'])) : 'N/A'; ?>
                                             </td>
                                             <td class="px-6 md:px-8 py-4 text-center">
-                                                <a href="orderdetail.php?id=<?php echo $order['id']; ?>" class="inline-flex items-center justify-center px-3 py-1.5 bg-blue-600  rounded-xl text-xs text-white font-bold transition border border-slate-200">
+                                                <a href="orderdetail.php?id=<?php echo $order['id']; ?>" class="inline-flex items-center justify-center px-3 py-1.5 bg-blue-600 rounded-xl text-xs text-white font-bold transition border border-slate-200">
                                                     <i class="fa-solid fa-eye mr-1.5 text-white"></i>View Detail
                                                 </a>
                                             </td>

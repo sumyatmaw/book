@@ -1,4 +1,10 @@
 <?php
+/**
+ * Orders Management Script
+ * Manages customer order statuses, inventory deductions upon completion,
+ * dynamic pagination limits, and payment validations.
+ */
+
 session_start();
 require_once '../config/db.php';
 
@@ -104,9 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 }
 
 // -------------------------------------------------------------------------
-// PAGINATION SETUP FOR ORDERS
+// DYNAMIC LIMIT & SMART PAGINATION SETUP
 // -------------------------------------------------------------------------
-$limit = 10; // Number of items per page
+// Handle items-per-page limit selector
+$allowed_limits = [10, 20, 30, 50, 100];
+$limit = isset($_GET['limit']) && in_array(intval($_GET['limit']), $allowed_limits) ? intval($_GET['limit']) : 10;
+
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? intval($_GET['page']) : 1;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $limit;
@@ -114,8 +123,13 @@ $offset = ($page - 1) * $limit;
 // Calculate total orders count
 $total_result = $conn->query("SELECT COUNT(*) AS total FROM Orders");
 $totalOrders = $total_result ? $total_result->fetch_assoc()['total'] : 0;
-$total_pages = ceil($totalOrders / $limit);
-if ($total_pages < 1) $total_pages = 1;
+
+$total_pages = max(1, ceil($totalOrders / $limit));
+if ($page > $total_pages) $page = $total_pages;
+
+// Calculate Showing entries boundaries
+$showing_from = $totalOrders > 0 ? $offset + 1 : 0;
+$showing_to = min($offset + $limit, $totalOrders);
 
 // Fetch paginated orders list from database
 $sql = "SELECT Orders.*, Users.name as customer_name, Payment.status as payment_status 
@@ -137,107 +151,127 @@ $pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Pa
 $pending_payments_count = mysqli_num_rows($pending_payments_query);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Orders - Online Book Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
+   <style>
+    /* Active nav link highlight */
+    .header-nav a.active,
+    .header-nav button.active {
+        font-weight: 700;
+        color: #1e293b !important;
+    }
+
+    /* Desktop: category dropdown opens on hover */
+    @media (min-width: 768px) {
+        .cat-dropdown:hover>.cat-dropdown-menu {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Mobile menu slide animation */
+    #mobileMenu {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-in-out;
+    }
+
+    #mobileMenu.open {
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+
+    /* Category dropdown styling */
+    .cat-dropdown-menu {
+        display: none;
+        opacity: 0;
+        transform: translateY(-2px);
+        transition: opacity 0.15s ease;
+    }
+
+    .cat-dropdown.open>.cat-dropdown-menu {
+        display: block;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* Search bar styling */
+    .header-search {
+        background-color: #ffffff !important;
+        box-shadow: none !important;
+    }
+
+    .header-search:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    .header-search::placeholder {
+        color: #94a3b8;
+    }
+
+    /* Hamburger menu button bar animation */
+    .hamburger-bar {
+        transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    /* Scrollbar တစ်ခုလုံး၏ အကျယ် (5px is perfect for small scroll) */
+    ::-webkit-scrollbar {
+        width: 5px;
+        /* ဒေါင်လိုက် scrollbar အကျယ် */
+        height: 5px;
+        /* အလျားလိုက် scrollbar အကျယ် */
+    }
+
+    /* Scrollbar နောက်ခံလမ်းကြောင်း (Track) */
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        /* နောက်ခံအရောင် */
+        border-radius: 10px;
+        /* ထောင့်ကွေး ဆွဲခြင်း */
+    }
+
+    /* ဆွဲရွှေ့ရသည့် အတုံး (Thumb) */
+    ::-webkit-scrollbar-thumb {
+        background: #888;
+        /* အတုံး၏ အရောင် */
+        border-radius: 10px;
+        /* ထောင့်ကွေး ဆွဲခြင်း */
+    }
+
+    /* Mouse ထောက်လိုက်သည့်အခါ ပြောင်းလဲမည့်အရောင် (Hover) */
+    ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+        /* FIXED: Removed the inline comment // which breaks CSS */
+    }
+</style>
 </head>
-<body class="bg-gray-300 font-sans antialiased text-slate-800">
+<body class="bg-gray-300 font-sans antialiased text-slate-800 h-full overflow-hidden">
 
 <div class="flex h-screen overflow-hidden">
 
     <!-- SIDEBAR -->
     <?php include '../auth/sidebar.php'; ?>
 
-    <div class="flex-1 flex flex-col overflow-hidden w-full">
+    <!-- WORKSPACE WRAPPER -->
+    <div class="flex-1 flex flex-col h-screen overflow-y-auto w-full">
         
-        <!-- HEADER -->
-        <header class="h-16 bg-yellow-300 border-b border-slate-200/80 flex items-center justify-between px-4 md:px-8 z-40 shrink-0">
-            <div class="flex items-center space-x-3">
-                <button onclick="toggleSidebar()" class="p-2 rounded-xl text-slate-600 hover:bg-slate-50 md:hidden transition cursor-pointer">
-                    <i class="fa-solid fa-bars text-lg"></i>
-                </button>
-                <h1 class="text-lg font-bold text-slate-800 md:text-xl">Orders Management</h1>
-            </div>
-
-            <div class="flex items-center space-x-4 relative">
-                <!-- Notifications Bell -->
-                <div class="relative">
-                    <button onclick="toggleNotificationDropdown(event)" id="notiBtn" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition cursor-pointer">
-                        <i class="fa-solid fa-bell"></i>
-                        <?php if ($low_stock_count > 0 || $pending_payments_count > 0): ?>
-                            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white"></span>
-                        <?php endif; ?>
-                    </button>
-
-                    <div id="notiDropdown" class="hidden absolute right-0 top-12 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
-                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 font-bold text-xs text-slate-700">Notifications</div>
-                        <div class="divide-y divide-slate-100 max-h-64 overflow-y-auto no-scrollbar">
-                            <?php if ($pending_payments_count > 0): ?>
-                                <?php while($payment = mysqli_fetch_assoc($pending_payments_query)): ?>
-                                <a href="manage_payment.php" class="block p-3 hover:bg-slate-50 transition">
-                                    <p class="text-xs font-bold text-indigo-600 flex items-center"><i class="fa-solid fa-wallet mr-1.5"></i> New Bank Transfer Pending</p>
-                                    <p class="text-xxs text-slate-500 mt-0.5">Amount: <?php echo number_format($payment['amount']); ?> MMK awaiting approval.</p>
-                                </a>
-                                <?php endwhile; ?>
-                            <?php endif; ?>
-
-                            <?php if ($low_stock_count > 0): ?>
-                                <div class="block p-3 bg-amber-50/40">
-                                    <p class="text-xs font-bold text-amber-600 flex items-center"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Critical Stock Warning</p>
-                                    <p class="text-xxs text-slate-500 mt-0.5">You have <?php echo $low_stock_count; ?> books currently running low on stock.</p>
-                                </div>
-                            <?php endif; ?>
-
-                            <?php if ($low_stock_count == 0 && $pending_payments_count == 0): ?>
-                                <div class="p-4 text-center text-xs text-slate-400 font-medium">No new operational notifications.</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Admin Profile -->
-                <div class="relative border-l border-slate-200 pl-4">
-                    <button onclick="toggleProfileDropdown(event)" id="profileBtn" class="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 text-slate-600 hover:border-indigo-500 flex items-center justify-center transition cursor-pointer overflow-hidden">
-                        <?php if (!empty($profile_path) && file_exists($profile_path)): ?>
-                            <img src="<?= htmlspecialchars($profile_path); ?>" alt="Admin" class="w-full h-full object-cover">
-                        <?php else: ?>
-                            <i class="fa-solid fa-user text-sm"></i>
-                        <?php endif; ?>
-                    </button>
-
-                    <div id="profileDropdown" class="hidden absolute right-0 top-12 w-48 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50">
-                        <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
-                            <p class="text-xs font-bold text-slate-800 truncate"><?= htmlspecialchars($admin_name); ?></p>
-                            <p class="text-[10px] text-slate-400 truncate"><?= htmlspecialchars($admin_email); ?></p>
-                        </div>
-                        <div class="py-1">
-                            <a href="dashboard.php" class="flex items-center space-x-2 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition">
-                                <i class="fa-solid fa-chart-pie w-4 text-slate-400"></i><span>Dashboard</span>
-                            </a>
-                            <a href="adminprofile.php" class="flex items-center space-x-2 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition">
-                                <i class="fa-solid fa-id-card w-4 text-slate-400"></i><span>My Profile</span>
-                            </a>
-                            <a href="../auth/logout.php" class="flex items-center space-x-2 px-4 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 transition">
-                                <i class="fa-solid fa-right-from-bracket w-4 text-rose-500"></i><span>Sign Out</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </header>
+        <!-- Header Navigation Component Include -->
+        <?php 
+            $page_title = "Orders Management";
+            include '../auth/nav.php'; 
+        ?>
 
         <!-- MAIN CANVAS -->
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 max-w-[1600px] w-full mx-auto">
+        <main class="p-3 sm:p-5 md:p-8 max-w-[1600px] w-full mx-auto">
             
-            <div class="flex items-center justify-between gap-3 mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                 <div>
                     <h1 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                         <i class="fa-solid fa-cart-shopping text-indigo-600"></i> Customer Orders
@@ -263,7 +297,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                 <div class="overflow-x-auto w-full no-scrollbar">
                     <table class="w-full text-left border-collapse min-w-[1000px]">
                         <thead>
-                            <tr class="bg-white text-slate-900 text-[11px] font-bold uppercase tracking-wider border-b border-slate-300">
+                            <tr class="bg-slate-50/80 text-slate-900 text-[11px] font-bold uppercase tracking-wider border-b border-slate-300">
                                 <th class="px-5 py-4 w-16 text-center">ID</th>
                                 <th class="px-5 py-4">Order Number</th>
                                 <th class="px-5 py-4">Customer Name</th>
@@ -302,9 +336,9 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                                     <i class="fa-solid fa-circle-check text-[10px]"></i> Paid
                                                 </span>
                                             <?php else: ?>
-                                                <a href="manage_payment.php" title="Click to verify payment" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800 hover:bg-rose-200 transition">
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800 hover:bg-rose-200 transition">
                                                     <i class="fa-solid fa-clock text-[10px]"></i> Unpaid
-                                                </a>
+                                                </span>
                                             <?php endif; ?>
                                         </td>
                                         
@@ -344,7 +378,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                                     <span>Update</span>
                                                 </button>
                                                 
-                                                <a href="orderdetail.php?id=<?= $row['id']; ?>" class="h-9 inline-flex items-center justify-center px-3 bg-yellow-500 hover:bg-yellow-700 text-slate-700 rounded-lg font-bold transition text-xs gap-1.5 shrink-0">
+                                                <a href="orderdetail.php?id=<?= $row['id']; ?>" class="h-9 inline-flex items-center justify-center px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold transition text-xs gap-1.5 shrink-0 shadow-xs">
                                                     <i class="fa-solid fa-eye text-[11px]"></i>
                                                     <span>Detail</span>
                                                 </a>
@@ -363,50 +397,98 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                     </table>
                 </div>
 
-                <!-- PAGINATION CONTROLS CONTAINER -->
-                <?php if ($total_pages > 1): ?>
-                    <div class="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <p class="text-xs text-slate-500 font-medium text-center sm:text-left">
-                            Showing <span class="font-bold text-slate-700"><?= min($offset + 1, $totalOrders); ?></span> to <span class="font-bold text-slate-700"><?= min($offset + $limit, $totalOrders); ?></span> of <span class="font-bold text-slate-700"><?= $totalOrders; ?></span> entries
-                        </p>
-                        <div class="flex items-center space-x-1">
+                <!-- PAGINATION CONTROLS CONTAINER WITH DYNAMIC LIMIT DROP-DOWN -->
+                <div class="px-4 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
+                    
+                    <!-- SHOWING ENTRIES TEXT & DYNAMIC SELECT LIMIT DROPDOWN -->
+                    <div class="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                        <span class="whitespace-nowrap">Showing</span>
+                        <form method="GET" action="orders.php" class="inline-block">
+                            <input type="hidden" name="page" value="1">
+                            <select name="limit" onchange="this.form.submit()" class="bg-white border border-slate-300 text-slate-800 font-bold rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer shadow-2xs">
+                                <option value="10" <?= $limit == 10 ? 'selected' : ''; ?>>10</option>
+                                <option value="20" <?= $limit == 20 ? 'selected' : ''; ?>>20</option>
+                                <option value="30" <?= $limit == 30 ? 'selected' : ''; ?>>30</option>
+                                <option value="50" <?= $limit == 50 ? 'selected' : ''; ?>>50</option>
+                                <option value="100" <?= $limit == 100 ? 'selected' : ''; ?>>100</option>
+                            </select>
+                        </form>
+                        <span class="whitespace-nowrap">
+                            (<?= $showing_from; ?>–<?= $showing_to; ?> of <?= $totalOrders; ?> entries)
+                        </span>
+                    </div>
+
+                    <!-- ADVANCED SMART PAGINATION LINKS -->
+                    <?php if ($total_pages > 1): ?>
+                        <div class="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 text-xs">
+                            
                             <!-- Previous Page Button -->
                             <?php if ($page > 1): ?>
-                                <a href="orders.php?page=<?= $page - 1; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
-                                    <i class="fa-solid fa-chevron-left mr-1"></i> Prev
+                                <a href="orders.php?page=<?= $page - 1; ?>&limit=<?= $limit; ?>" class="px-2.5 sm:px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center gap-1 shadow-2xs">
+                                    <i class="fa-solid fa-chevron-left text-[10px]"></i> Prev
                                 </a>
                             <?php else: ?>
-                                <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-400 cursor-not-allowed">
-                                    <i class="fa-solid fa-chevron-left mr-1"></i> Prev
+                                <span class="px-2.5 sm:px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-400 cursor-not-allowed flex items-center gap-1">
+                                    <i class="fa-solid fa-chevron-left text-[10px]"></i> Prev
                                 </span>
                             <?php endif; ?>
 
-                            <!-- Page Numbers Loop -->
-                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                            <!-- Always display Page 1 -->
+                            <?php if ($page == 1): ?>
+                                <span class="px-3 py-1.5 bg-indigo-600 border border-indigo-600 rounded-lg font-bold text-white shadow-2xs">1</span>
+                            <?php else: ?>
+                                <a href="orders.php?page=1&limit=<?= $limit; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">1</a>
+                            <?php endif; ?>
+
+                            <!-- Front Ellipsis -->
+                            <?php if ($page > 3): ?>
+                                <span class="px-1.5 py-1 text-slate-400 font-bold select-none">...</span>
+                            <?php endif; ?>
+
+                            <!-- Middle Page Numbers: (Page - 1), Current Page, (Page + 1) -->
+                            <?php 
+                            $start = max(2, $page - 1);
+                            $end = min($total_pages - 1, $page + 1);
+
+                            for ($i = $start; $i <= $end; $i++): 
+                                if ($i == 1 || $i == $total_pages) continue;
+                            ?>
                                 <?php if ($i == $page): ?>
-                                    <span class="px-3 py-1.5 bg-indigo-600 border border-indigo-600 rounded-lg text-xs font-bold text-white shadow-xs">
-                                        <?= $i; ?>
-                                    </span>
+                                    <span class="px-3 py-1.5 bg-indigo-600 border border-indigo-600 rounded-lg font-bold text-white shadow-2xs"><?= $i; ?></span>
                                 <?php else: ?>
-                                    <a href="orders.php?page=<?= $i; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
-                                        <?= $i; ?>
-                                    </a>
+                                    <a href="orders.php?page=<?= $i; ?>&limit=<?= $limit; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition"><?= $i; ?></a>
                                 <?php endif; ?>
                             <?php endfor; ?>
 
+                            <!-- Back Ellipsis -->
+                            <?php if ($page < $total_pages - 2): ?>
+                                <span class="px-1.5 py-1 text-slate-400 font-bold select-none">...</span>
+                            <?php endif; ?>
+
+                            <!-- Always display Last Page -->
+                            <?php if ($total_pages > 1): ?>
+                                <?php if ($page == $total_pages): ?>
+                                    <span class="px-3 py-1.5 bg-indigo-600 border border-indigo-600 rounded-lg font-bold text-white shadow-2xs"><?= $total_pages; ?></span>
+                                <?php else: ?>
+                                    <a href="orders.php?page=<?= $total_pages; ?>&limit=<?= $limit; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition"><?= $total_pages; ?></a>
+                                <?php endif; ?>
+                            <?php endif; ?>
+
                             <!-- Next Page Button -->
                             <?php if ($page < $total_pages): ?>
-                                <a href="orders.php?page=<?= $page + 1; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
-                                    Next <i class="fa-solid fa-chevron-right ml-1"></i>
+                                <a href="orders.php?page=<?= $page + 1; ?>&limit=<?= $limit; ?>" class="px-2.5 sm:px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center gap-1 shadow-2xs">
+                                    Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                 </a>
                             <?php else: ?>
-                                <span class="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-400 cursor-not-allowed">
-                                    Next <i class="fa-solid fa-chevron-right ml-1"></i>
+                                <span class="px-2.5 sm:px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-400 cursor-not-allowed flex items-center gap-1">
+                                    Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                 </span>
                             <?php endif; ?>
+
                         </div>
-                    </div>
-                <?php endif; ?>
+                    <?php endif; ?>
+
+                </div>
 
             </div>
         </main>

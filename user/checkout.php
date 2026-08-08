@@ -40,17 +40,21 @@ while ($row = $cart_result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Fetch active payment methods from database added by Admin
+// Fetch active payment methods from database added by Admin (including logo/image)
 $payment_methods_db = [];
 $pm_query = $conn->query("SELECT * FROM payment_method WHERE is_active = 1 ORDER BY id DESC");
 if ($pm_query && $pm_query->num_rows > 0) {
     while ($pm_row = $pm_query->fetch_assoc()) {
+        // Detect logo field name from table (logo, image, or icon)
+        $logo_file = $pm_row['logo'] ?? $pm_row['image'] ?? $pm_row['icon'] ?? '';
+        
         $payment_methods_db[$pm_row['id']] = [
             'id' => $pm_row['id'],
             'title' => $pm_row['method_name'],
             'holder' => $pm_row['account_holder'],
             'number' => $pm_row['account_number'],
             'description' => $pm_row['description'],
+            'logo' => !empty($logo_file) ? '../uploads/qr_codes/' . $logo_file : '',
             'qr' => !empty($pm_row['qr_code']) ? '../uploads/qr_codes/' . $pm_row['qr_code'] : ''
         ];
     }
@@ -161,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_methods_db) : null;
 ?>
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-50">
+<html lang="en" class="h-full bg-slate-100">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -177,7 +181,7 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
 
     <?php include "../auth/header.php"; ?>
 
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 md:py-10 lg:py-12">
+    <main class="flex-grow max-w-[1600px] w-full mx-auto px-4 py-6 md:py-10 lg:py-12">
         
         <?php if ($is_success): ?>
             <!-- Success Confirmation State Screen -->
@@ -205,7 +209,7 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
             </div>
 
         <?php elseif (empty($cart_items)): ?>
-            <!-- Empty Cart Display state -->
+            <!-- Empty Cart Display State -->
             <div class="text-center py-16 bg-white rounded-3xl border border-slate-100 shadow-sm max-w-md mx-auto p-8 space-y-4">
                 <i class="fa-solid fa-basket-shopping text-4xl text-slate-300"></i>
                 <h2 class="text-xl font-bold text-slate-800">Your cart is currently empty</h2>
@@ -214,7 +218,7 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
             </div>
 
         <?php else: ?>
-            <!-- Primary Checkout & Payment Combined Form Page -->
+            <!-- Primary Checkout Page Heading -->
             <div class="mb-6 md:mb-8">
                 <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">Checkout & Payment</h1>
                 <p class="text-xs md:text-sm text-slate-500 mt-1">Provide your delivery information and upload payment transfer slip to complete order.</p>
@@ -227,19 +231,18 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
                 </div>
             <?php endif; ?>
 
-            <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
-
-                <!-- Left Column: Customer Details + Payment QR & Slip Upload -->
-                <div class="lg:col-span-2 space-y-6">
+            <!-- Form layout: Displays 3 cards side-by-side horizontally on desktop displays -->
+            <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-stretch">
                     
-                    <!-- Section 1: Receiver Details -->
-                    <div class="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-slate-100 space-y-6">
+                <!-- Card 1: Customer Information -->
+                <div class="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-slate-100 flex flex-col justify-between h-full">
+                    <div class="space-y-6">
                         <div class="flex items-center gap-3 border-b border-slate-100 pb-4">
                             <i class="fa-solid fa-address-card text-indigo-600 text-xl"></i>
                             <h2 class="text-lg font-bold text-slate-800 tracking-tight">Customer Information</h2>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="space-y-4">
                             <div class="space-y-2">
                                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Receiver Name <span class="text-rose-500">*</span></label>
                                 <input type="text" name="name" value="<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>" required placeholder="Enter receiver's name"
@@ -251,17 +254,19 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
                                 <input type="tel" name="phone" value="<?= htmlspecialchars($user_phone ?: ($_SESSION['user_phone'] ?? '')) ?>" required placeholder="Enter mobile phone number"
                                        class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition bg-slate-50/50 text-slate-800">
                             </div>
-                        </div>
 
-                        <div class="space-y-2">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500"> Address<span class="text-rose-500">*</span></label>
-                            <textarea name="address" rows="3" required placeholder="Enter complete delivery details"
-                                      class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition bg-slate-50/50 text-slate-800 resize-none leading-relaxed"><?= htmlspecialchars($user_address) ?></textarea>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500"> Address<span class="text-rose-500">*</span></label>
+                                <textarea name="address" rows="4" required placeholder=""
+                                          class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition bg-slate-50/50 text-slate-800 resize-none leading-relaxed"><?= htmlspecialchars($user_address) ?></textarea>
+                            </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Section 2: Payment Provider Details & Slip Upload -->
-                    <div class="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-slate-100 space-y-6">
+                <!-- Card 2: Payment Details -->
+                <div class="bg-white rounded-3xl p-5 sm:p-8 shadow-sm border border-slate-100 flex flex-col justify-between h-full">
+                    <div class="space-y-6">
                         <div class="flex items-center gap-3 border-b border-slate-100 pb-4">
                             <i class="fa-solid fa-wallet text-indigo-600 text-xl"></i>
                             <h2 class="text-lg font-bold text-slate-800 tracking-tight">Payment Details</h2>
@@ -270,42 +275,71 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
                         <?php if (!empty($payment_methods_db)): ?>
                             <div class="space-y-2">
                                 <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Select Payment Method <span class="text-rose-500">*</span></label>
+                                
+                                <!-- Custom Payment Method Dropdown with Logo Preview -->
                                 <div class="relative">
-                                    <select name="payment_method" id="payment_method_select" required onchange="switchPaymentMethod(this.value)"
-                                            class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition bg-slate-50/50 text-slate-700 cursor-pointer font-medium">
+                                    <!-- Custom Dropdown Trigger Button -->
+                                    <button type="button" id="pm_dropdown_btn" onclick="togglePaymentDropdown()" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm bg-slate-50/50 text-slate-800 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
+                                        <div class="flex items-center gap-3" id="pm_selected_display">
+                                            <?php $first_pm = $payment_methods_db[$first_method_key]; ?>
+                                            <?php if (!empty($first_pm['logo'])): ?>
+                                                <img id="selected_pm_logo" src="<?= htmlspecialchars($first_pm['logo']); ?>" alt="<?= htmlspecialchars($first_pm['title']); ?>" class="w-6 h-6 object-contain rounded-md shrink-0">
+                                            <?php else: ?>
+                                                <div id="selected_pm_logo_fallback" class="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                                    <?= strtoupper(substr($first_pm['title'], 0, 2)); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <span id="selected_pm_title" class="font-semibold text-slate-800"><?= htmlspecialchars($first_pm['title']); ?></span>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-200" id="pm_dropdown_arrow"></i>
+                                    </button>
+
+                                    <!-- Hidden radio inputs for form submission -->
+                                    <?php foreach ($payment_methods_db as $pm_id => $pm): ?>
+                                        <input type="radio" name="payment_method" id="pm_radio_<?= $pm_id ?>" value="<?= $pm_id; ?>" <?= $pm_id == $first_method_key ? 'checked' : ''; ?> class="sr-only">
+                                    <?php endforeach; ?>
+
+                                    <!-- Dropdown Options Menu -->
+                                    <div id="pm_dropdown_menu" class="hidden absolute z-30 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
                                         <?php foreach ($payment_methods_db as $pm_id => $pm): ?>
-                                            <option value="<?= $pm_id; ?>"><?= htmlspecialchars($pm['title']); ?></option>
+                                            <div onclick="selectPaymentOption('<?= $pm_id ?>')" class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition text-sm">
+                                                <?php if (!empty($pm['logo'])): ?>
+                                                    <img src="<?= htmlspecialchars($pm['logo']); ?>" alt="<?= htmlspecialchars($pm['title']); ?>" class="w-6 h-6 object-contain rounded-md shrink-0">
+                                                <?php else: ?>
+                                                    <div class="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                                        <?= strtoupper(substr($pm['title'], 0, 2)); ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <span class="font-medium text-slate-800"><?= htmlspecialchars($pm['title']); ?></span>
+                                            </div>
                                         <?php endforeach; ?>
-                                    </select>
-                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                                        <i class="fa-solid fa-chevron-down text-xs"></i>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Dynamic Account Box -->
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center border border-slate-100 rounded-2xl p-4 sm:p-5 bg-slate-50/50">
-                                <div class="border border-dashed border-slate-200 rounded-2xl p-4 bg-white flex flex-col items-center justify-center gap-3">
-                                    <img id="payment_qr_img" src="<?= htmlspecialchars($payment_methods_db[$first_method_key]['qr'] ?: 'https://placehold.co/200x200?text=No+QR+Code'); ?>" alt="Payment QR Code" class="w-36 h-36 md:w-40 md:h-40 object-contain rounded-lg">
-                                    <p class="text-[11px] text-slate-400 font-medium text-center">Scan QR code or transfer to account number</p>
+                            <!-- Dynamic Account Details Box -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                                <div class="border border-dashed border-slate-200 rounded-2xl p-3 bg-white flex flex-col items-center justify-center gap-2">
+                                    <img id="payment_qr_img" src="<?= htmlspecialchars($payment_methods_db[$first_method_key]['qr'] ?: 'https://placehold.co/200x200?text=No+QR+Code'); ?>" alt="Payment QR Code" class="w-28 h-28 md:w-32 md:h-32 object-contain rounded-lg">
+                                    <p class="text-[10px] text-slate-400 font-medium text-center">Scan QR code or transfer to account number</p>
                                 </div>
 
-                                <div class="space-y-3.5 text-xs md:text-sm">
+                                <div class="space-y-3 text-xs md:text-sm">
                                     <div>
-                                        <span class="text-xs text-slate-400 font-semibold block uppercase tracking-wide">Account Holder</span>
-                                        <span id="payment_holder_name" class="text-base font-bold text-slate-800"><?= htmlspecialchars($payment_methods_db[$first_method_key]['holder']); ?></span>
+                                        <span class="text-[10px] text-slate-400 font-semibold block uppercase tracking-wide">Account Holder</span>
+                                        <span id="payment_holder_name" class="text-sm font-bold text-slate-800"><?= htmlspecialchars($payment_methods_db[$first_method_key]['holder']); ?></span>
                                     </div>
                                     <div>
-                                        <span class="text-xs text-slate-400 font-semibold block uppercase tracking-wide">Account Number</span>
+                                        <span class="text-[10px] text-slate-400 font-semibold block uppercase tracking-wide">Account Number</span>
                                         <div class="flex items-center gap-2 mt-0.5">
-                                            <span id="accountNumber" class="text-base font-extrabold text-indigo-600 tracking-wide"><?= htmlspecialchars($payment_methods_db[$first_method_key]['number']); ?></span>
+                                            <span id="accountNumber" class="text-sm font-extrabold text-indigo-600 tracking-wide"><?= htmlspecialchars($payment_methods_db[$first_method_key]['number']); ?></span>
                                             <button type="button" onclick="copyNumber()" class="text-slate-400 hover:text-indigo-600 transition cursor-pointer" title="Copy Account Number">
-                                                <i class="fa-regular fa-copy text-sm"></i>
+                                                <i class="fa-regular fa-copy text-xs"></i>
                                             </button>
                                         </div>
                                     </div>
-                                    <div id="payment_description_box" class="bg-amber-50 border border-amber-100 rounded-xl p-3 <?= empty($payment_methods_db[$first_method_key]['description']) ? 'hidden' : ''; ?>">
-                                        <p class="text-[11px] leading-relaxed text-amber-800 font-medium">
+                                    <div id="payment_description_box" class="bg-amber-50 border border-amber-100 rounded-xl p-2.5 <?= empty($payment_methods_db[$first_method_key]['description']) ? 'hidden' : ''; ?>">
+                                        <p class="text-[10px] leading-relaxed text-amber-800 font-medium">
                                             <strong class="text-amber-600 font-bold">Note:</strong> <span id="payment_description_text"><?= htmlspecialchars($payment_methods_db[$first_method_key]['description']); ?></span>
                                         </p>
                                     </div>
@@ -317,47 +351,38 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
                             </div>
                         <?php endif; ?>
 
-                        <!-- Transaction Reference (Optional) -->
-                        <!-- <div class="space-y-2">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Transaction Ref / ID <span class="text-slate-400 font-normal">(Optional)</span></label>
-                            <input type="text" name="transaction_ref" placeholder="Enter transaction reference ID"
-                                   class="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition bg-slate-50/50 text-slate-800">
-                        </div> -->
-
-                        <!-- Payment Slip File Upload -->
+                        <!-- Payment Slip Upload Input -->
                         <div class="space-y-2">
                             <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Upload Payment Slip / Screenshot <span class="text-rose-500">*</span></label>
                             
-                            <div class="flex items-center gap-3 w-full border border-slate-200 rounded-xl p-2 bg-slate-50/50">
+                            <div class="relative flex items-center gap-3 w-full border border-slate-200 rounded-xl p-2 bg-slate-50/50">
                                 <label for="file-upload" class="bg-white border border-slate-300 hover:border-indigo-500 hover:text-indigo-600 text-slate-700 font-medium text-xs md:text-sm px-4 py-2.5 rounded-lg cursor-pointer transition shrink-0 shadow-sm flex items-center gap-2">
                                     <i class="fa-solid fa-upload"></i>
                                     <span>Choose File</span>
                                 </label>
 
-                                <input type="file" name="payment_slip" id="file-upload" required accept="image/*" onchange="previewSmallImage(event)" class="hidden"/>
+                                <input type="file" name="payment_slip" id="file-upload" required accept="image/*" onchange="previewSmallImage(event)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer pointer-events-auto z-10" />
 
-                                <div id="small-preview-container" class="hidden items-center gap-2 overflow-hidden">
-                                    <img id="small-preview-img" src="#" alt="Slip Thumbnail" class="w-12 h-12 object-cover rounded-lg border border-slate-300 shadow-sm shrink-0">
+                                <div id="small-preview-container" class="hidden items-center gap-2 overflow-hidden shrink-0 z-20">
+                                    <img id="small-preview-img" src="#" alt="Slip Thumbnail" class="w-10 h-10 object-cover rounded-lg border border-slate-300 shadow-sm shrink-0">
                                     <button type="button" onclick="removeSmallImage()" class="text-slate-400 hover:text-rose-500 text-xs transition p-1" title="Remove image">
                                         <i class="fa-solid fa-xmark"></i>
                                     </button>
                                 </div>
                             </div>
-                            <p class="text-[11px] text-slate-400">Allowed formats: JPG, JPEG, PNG, WEBP (Max: 2MB).</p>
                         </div>
                     </div>
-
                 </div>
 
-                <!-- Right Column: Order Summary & Action Button -->
-                <div class="space-y-6">
-                    <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-100 sticky top-6">
+                <!-- Card 3: Order Summary -->
+                <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-100 flex flex-col justify-between h-full">
+                    <div>
                         <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
                             <i class="fa-solid fa-cart-shopping text-indigo-600 text-lg"></i>
                             <h2 class="text-base md:text-lg font-bold text-slate-800 tracking-tight">Order Summary</h2>
                         </div>
 
-                        <div class="space-y-4 max-h-64 overflow-y-auto border-b border-slate-100 pb-4 mb-4 pr-1">
+                        <div class="space-y-4 max-h-56 overflow-y-auto border-b border-slate-100 pb-4 mb-4 pr-1">
                             <?php foreach ($cart_items as $item): ?>
                             <div class="flex justify-between items-start gap-4 text-sm">
                                 <div class="min-w-0">
@@ -370,30 +395,23 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
                         </div>
 
                         <div class="space-y-3 text-sm border-b border-slate-100 pb-4 mb-4 text-slate-500">
-                            <div class="flex justify-between">
-                                <span>Subtotal</span>
-                                <span class="font-medium text-slate-800"><?= number_format($subtotal) ?> ကျပ်</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>Delivery Fee</span>
-                                <span class="font-medium text-slate-800"><?= number_format($delivery_fee) ?> ကျပ်</span>
+                            <div class="flex justify-between text-gray-900 font-bold">
+                                <span>Total Amount</span>
+                                <span class="font-medium text-gray-900 font-bold"><?= number_format($subtotal) ?> ကျပ်</span>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="flex justify-between items-center mb-6">
-                            <span class="text-sm md:text-base font-bold text-slate-800">Total Amount</span>
-                            <span class="text-xl font-extrabold text-indigo-600"><?= number_format($total_amount) ?> ကျပ်</span>
-                        </div>
-
+                    <div class="space-y-3 pt-2">
                         <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 px-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-[0.99] cursor-pointer text-sm">
                             Submit Order & Payment <i class="fa-solid fa-arrow-right text-xs"></i>
                         </button>
-                    </div>
 
-                    <div class="text-center">
-                        <a href="cart.php" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-indigo-600 transition-colors">
-                            <i class="fa-solid fa-chevron-left text-[10px]"></i> Back to Cart
-                        </a>
+                        <div class="text-center">
+                            <a href="cart.php" class="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-indigo-600 transition-colors">
+                                <i class="fa-solid fa-chevron-left text-[10px]"></i> Back to Cart
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -407,14 +425,39 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
     <script>
     const paymentMap = <?= json_encode($payment_methods_db); ?>;
 
-    function switchPaymentMethod(methodKey) {
+    function togglePaymentDropdown() {
+        const menu = document.getElementById('pm_dropdown_menu');
+        const arrow = document.getElementById('pm_dropdown_arrow');
+        menu.classList.toggle('hidden');
+        arrow.classList.toggle('rotate-180');
+    }
+
+    function selectPaymentOption(methodKey) {
         if (paymentMap[methodKey]) {
             const data = paymentMap[methodKey];
-            
+
+            // Check corresponding radio input
+            const radio = document.getElementById('pm_radio_' + methodKey);
+            if (radio) radio.checked = true;
+
+            // Update trigger display with logo & title
+            const display = document.getElementById('pm_selected_display');
+            let logoHtml = '';
+            if (data.logo && data.logo !== '') {
+                logoHtml = `<img src="${data.logo}" alt="${data.title}" class="w-6 h-6 object-contain rounded-md shrink-0">`;
+            } else {
+                const initial = data.title.substring(0, 2).toUpperCase();
+                logoHtml = `<div class="w-6 h-6 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">${initial}</div>`;
+            }
+            display.innerHTML = `${logoHtml}<span class="font-semibold text-slate-800">${data.title}</span>`;
+
+            // Close dropdown menu
+            togglePaymentDropdown();
+
             // Update QR image with fallback placeholder if empty
             const qrImg = document.getElementById('payment_qr_img');
             qrImg.src = data.qr !== '' ? data.qr : 'https://placehold.co/200x200?text=No+QR+Code';
-            
+
             // Update holder name & account number
             document.getElementById('payment_holder_name').innerText = data.holder;
             document.getElementById('accountNumber').innerText = data.number;
@@ -430,6 +473,17 @@ $first_method_key = !empty($payment_methods_db) ? array_key_first($payment_metho
             }
         }
     }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        const btn = document.getElementById('pm_dropdown_btn');
+        const menu = document.getElementById('pm_dropdown_menu');
+        if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add('hidden');
+            const arrow = document.getElementById('pm_dropdown_arrow');
+            if (arrow) arrow.classList.remove('rotate-180');
+        }
+    });
 
     function copyNumber() {
         var numText = document.getElementById("accountNumber").innerText;
