@@ -2,7 +2,7 @@
 /**
  * Orders Management Script
  * Manages customer order statuses, inventory deductions upon completion,
- * dynamic pagination limits, and payment validations.
+ * dynamic pagination limits, and payment validations without delivery fees.
  */
 
 session_start();
@@ -131,8 +131,15 @@ if ($page > $total_pages) $page = $total_pages;
 $showing_from = $totalOrders > 0 ? $offset + 1 : 0;
 $showing_to = min($offset + $limit, $totalOrders);
 
-// Fetch paginated orders list from database
-$sql = "SELECT Orders.*, Users.name as customer_name, Payment.status as payment_status 
+// Fetch paginated orders list (Calculate item subtotal directly from Order_item table)
+$sql = "SELECT Orders.*, 
+               COALESCE(
+                   (SELECT SUM(price * quantity) FROM Order_item WHERE order_id = Orders.id), 
+                   Orders.total_amount, 
+                   0
+               ) AS calculated_total,
+               Users.name as customer_name, 
+               Payment.status as payment_status 
         FROM Orders 
         LEFT JOIN Users ON Orders.user_id = Users.id 
         LEFT JOIN Payment ON Orders.id = Payment.order_id
@@ -159,14 +166,14 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
    <style>
-    /* Active nav link highlight */
+    /* Active navigation link highlight */
     .header-nav a.active,
     .header-nav button.active {
         font-weight: 700;
         color: #1e293b !important;
     }
 
-    /* Desktop: category dropdown opens on hover */
+    /* Desktop category dropdown opens on hover */
     @media (min-width: 768px) {
         .cat-dropdown:hover>.cat-dropdown-menu {
             display: block;
@@ -216,39 +223,32 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
         color: #94a3b8;
     }
 
-    /* Hamburger menu button bar animation */
+    /* Hamburger menu bar animation */
     .hamburger-bar {
         transition: transform 0.2s ease, opacity 0.2s ease;
     }
 
-    /* Scrollbar တစ်ခုလုံး၏ အကျယ် (5px is perfect for small scroll) */
+    /* Custom scrollbar width */
     ::-webkit-scrollbar {
         width: 5px;
-        /* ဒေါင်လိုက် scrollbar အကျယ် */
         height: 5px;
-        /* အလျားလိုက် scrollbar အကျယ် */
     }
 
-    /* Scrollbar နောက်ခံလမ်းကြောင်း (Track) */
+    /* Custom scrollbar track */
     ::-webkit-scrollbar-track {
         background: #f1f1f1;
-        /* နောက်ခံအရောင် */
         border-radius: 10px;
-        /* ထောင့်ကွေး ဆွဲခြင်း */
     }
 
-    /* ဆွဲရွှေ့ရသည့် အတုံး (Thumb) */
+    /* Custom scrollbar thumb */
     ::-webkit-scrollbar-thumb {
         background: #888;
-        /* အတုံး၏ အရောင် */
         border-radius: 10px;
-        /* ထောင့်ကွေး ဆွဲခြင်း */
     }
 
-    /* Mouse ထောက်လိုက်သည့်အခါ ပြောင်းလဲမည့်အရောင် (Hover) */
+    /* Custom scrollbar thumb hover effect */
     ::-webkit-scrollbar-thumb:hover {
         background: #555;
-        /* FIXED: Removed the inline comment // which breaks CSS */
     }
 </style>
 </head>
@@ -314,6 +314,8 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                     <?php 
                                         $payStatus = strtolower($row['payment_status'] ?? 'pending'); 
                                         $isPayCompleted = ($payStatus === 'completed');
+                                        // Display subtotal calculated directly from Order_item query
+                                        $displayTotal = floatval($row['calculated_total'] ?? $row['total_amount'] ?? 0);
                                     ?>
                                     <tr class="hover:bg-slate-50/60 transition">
                                         <td class="px-5 py-4 text-center text-slate-900 font-bold"><?= $row['id']; ?></td>
@@ -327,7 +329,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                         </td>
                                         
                                         <td class="px-5 py-4 font-bold text-slate-900">
-                                            <?= number_format($row['total_amount']); ?> ကျပ်
+                                            <?= number_format($displayTotal); ?> ကျပ်
                                         </td>
 
                                         <td class="px-5 py-4">
@@ -445,7 +447,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                 <span class="px-1.5 py-1 text-slate-400 font-bold select-none">...</span>
                             <?php endif; ?>
 
-                            <!-- Middle Page Numbers: (Page - 1), Current Page, (Page + 1) -->
+                            <!-- Middle Page Numbers -->
                             <?php 
                             $start = max(2, $page - 1);
                             $end = min($total_pages - 1, $page + 1);

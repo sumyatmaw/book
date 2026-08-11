@@ -56,13 +56,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $author      = trim($_POST['author']);
         $price       = trim($_POST['price']);
         $stock       = intval($_POST['stock']);
-        $description = trim($_POST['description']);
+        // Description is optional
+        $description = isset($_POST['description']) ? trim($_POST['description']) : '';
         $book_image  = "";
 
         // Prevent negative stock numbers in backend
         if ($stock < 0) {
             $_SESSION['error'] = "စတော့ပမာဏ အနုတ် ကိန်းဂဏန်း ထည့်သွင်း၍မရပါ!";
-        } elseif (empty($category_id) || empty($title) || empty($author) || empty($price) || empty($description)) {
+        } elseif (empty($category_id) || empty($title) || empty($author) || empty($price)) {
             $_SESSION['error'] = "ကျေးဇူးပြု၍ လိုအပ်သော အချက်အလက်များကို အပြည့်အစုံဖြည့်ပါ။";
         } else {
             if (isset($_FILES['book_image']) && $_FILES['book_image']['error'] === 0) {
@@ -110,13 +111,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $author      = trim($_POST['author']);
         $price       = trim($_POST['price']);
         $stock       = intval($_POST['stock']);
-        $description = trim($_POST['description']);
+        // Description is optional
+        $description = isset($_POST['description']) ? trim($_POST['description']) : '';
         $book_image  = $_POST['old_image'];
 
         // Prevent negative stock numbers in backend
         if ($stock < 0) {
             $_SESSION['error'] = "စတော့ပမာဏ အနုတ် ကိန်းဂဏန်း ထည့်သွင်း၍မရပါ!";
-        } elseif (empty($category_id) || empty($title) || empty($author) || empty($price) || empty($description)) {
+        } elseif (empty($category_id) || empty($title) || empty($author) || empty($price)) {
             $_SESSION['error'] = "ကျေးဇူးပြု၍ လိုအပ်သော အချက်အလက်များကို အပြည့်အစုံဖြည့်ပါ။";
         } else {
             if (isset($_FILES['book_image']) && $_FILES['book_image']['error'] === 0) {
@@ -199,7 +201,7 @@ if (isset($_SESSION['error'])) {
 $categories = $conn->query("SELECT * FROM Categories ORDER BY category_name ASC");
 
 // -------------------------------------------------------------------------
-// PAGINATION & LIMIT SETUP
+// PAGINATION & STOCK FILTER SETUP
 // -------------------------------------------------------------------------
 $limit = isset($_GET['limit']) && is_numeric($_GET['limit']) ? intval($_GET['limit']) : 10;
 $allowed_limits = [10, 20, 30, 50, 100];
@@ -210,8 +212,18 @@ if (!in_array($limit, $allowed_limits)) {
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? intval($_GET['page']) : 1;
 if ($page < 1) $page = 1;
 
-// Calculate total books count
-$total_result = $conn->query("SELECT COUNT(*) AS total FROM Books");
+$stock_status = isset($_GET['stock_status']) ? trim($_GET['stock_status']) : '';
+
+// Build dynamic WHERE clause based on Stock Status filter
+$where_clause = "";
+if ($stock_status === 'low_stock') {
+    $where_clause = " WHERE Books.stock < 3 ";
+} elseif ($stock_status === 'in_stock') {
+    $where_clause = " WHERE Books.stock >= 3 ";
+}
+
+// Calculate total books count according to filter
+$total_result = $conn->query("SELECT COUNT(*) AS total FROM Books" . $where_clause);
 $total_books = $total_result ? $total_result->fetch_assoc()['total'] : 0;
 $total_pages = ceil($total_books / $limit);
 if ($total_pages < 1) $total_pages = 1;
@@ -219,12 +231,14 @@ if ($page > $total_pages) $page = $total_pages;
 
 $offset = ($page - 1) * $limit;
 
-// Fetch paginated books list
+// Fetch filtered and paginated books list
 $sql = "SELECT Books.*, Categories.category_name 
         FROM Books
         LEFT JOIN Categories ON Books.category_id = Categories.id
+        " . $where_clause . "
         ORDER BY Books.id DESC 
         LIMIT ? OFFSET ?";
+
 $stmt_page = $conn->prepare($sql);
 $stmt_page->bind_param("ii", $limit, $offset);
 $stmt_page->execute();
@@ -252,17 +266,16 @@ if (isset($_GET['edit_id'])) {
     $stmt->close();
 
     // Fetch all categories
-$result = $conn->query("SELECT * FROM Categories ORDER BY id DESC");
-$allCategories = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
-$totalCategories = count($allCategories);
+    $result = $conn->query("SELECT * FROM Categories ORDER BY id DESC");
+    $allCategories = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    $totalCategories = count($allCategories);
 
-// Fetch Alert Badge Notifications
-$low_stock_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Books WHERE stock < 3");
-$low_stock_count = mysqli_fetch_assoc($low_stock_query)['total'] ?? 0;
+    // Fetch Alert Badge Notifications
+    $low_stock_query = mysqli_query($conn, "SELECT COUNT(*) as total FROM Books WHERE stock < 3");
+    $low_stock_count = mysqli_fetch_assoc($low_stock_query)['total'] ?? 0;
 
-$pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
-$pending_payments_count = mysqli_num_rows($pending_payments_query);
-
+    $pending_payments_query = mysqli_query($conn, "SELECT id, amount, status FROM Payment WHERE status = 'pending' ORDER BY id DESC LIMIT 3");
+    $pending_payments_count = mysqli_num_rows($pending_payments_query);
 }
 ?>
 <!DOCTYPE html>
@@ -274,14 +287,14 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-    /* Active nav link highlight */
+    /* Active navigation link styling */
     .header-nav a.active,
     .header-nav button.active {
         font-weight: 700;
         color: #1e293b !important;
     }
 
-    /* Desktop: category dropdown opens on hover */
+    /* Desktop category dropdown behavior */
     @media (min-width: 768px) {
         .cat-dropdown:hover>.cat-dropdown-menu {
             display: block;
@@ -290,7 +303,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
         }
     }
 
-    /* Mobile menu slide animation */
+    /* Mobile sidebar menu slide animation */
     #mobileMenu {
         max-height: 0;
         overflow: hidden;
@@ -302,7 +315,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
         overflow-y: auto;
     }
 
-    /* Category dropdown styling */
+    /* Category dropdown menu transition */
     .cat-dropdown-menu {
         display: none;
         opacity: 0;
@@ -316,7 +329,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
         transform: translateY(0);
     }
 
-    /* Search bar styling */
+    /* Search bar input styles */
     .header-search {
         background-color: #ffffff !important;
         box-shadow: none !important;
@@ -331,39 +344,32 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
         color: #94a3b8;
     }
 
-    /* Hamburger menu button bar animation */
+    /* Hamburger icon animation transition */
     .hamburger-bar {
         transition: transform 0.2s ease, opacity 0.2s ease;
     }
 
-    /* Scrollbar တစ်ခုလုံး၏ အကျယ် (5px is perfect for small scroll) */
+    /* Custom thin scrollbar track */
     ::-webkit-scrollbar {
         width: 5px;
-        /* ဒေါင်လိုက် scrollbar အကျယ် */
         height: 5px;
-        /* အလျားလိုက် scrollbar အကျယ် */
     }
 
-    /* Scrollbar နောက်ခံလမ်းကြောင်း (Track) */
+    /* Custom scrollbar background */
     ::-webkit-scrollbar-track {
         background: #f1f1f1;
-        /* နောက်ခံအရောင် */
         border-radius: 10px;
-        /* ထောင့်ကွေး ဆွဲခြင်း */
     }
 
-    /* ဆွဲရွှေ့ရသည့် အတုံး (Thumb) */
+    /* Custom scrollbar thumb */
     ::-webkit-scrollbar-thumb {
         background: #888;
-        /* အတုံး၏ အရောင် */
         border-radius: 10px;
-        /* ထောင့်ကွေး ဆွဲခြင်း */
     }
 
-    /* Mouse ထောက်လိုက်သည့်အခါ ပြောင်းလဲမည့်အရောင် (Hover) */
+    /* Custom scrollbar hover state */
     ::-webkit-scrollbar-thumb:hover {
         background: #555;
-        /* FIXED: Removed the inline comment // which breaks CSS */
     }
 </style>
 </head>
@@ -414,10 +420,10 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
 
                         <!-- Stock Filter Selection Bar -->
                         <div class="relative w-full sm:w-48 shrink-0">
-                            <select id="stockSearchSelect" onchange="filterBooks()" class="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-xs cursor-pointer appearance-none">
-                                <option value="">-- All Stock Status --</option>
-                                <option value="in stock">In Stock</option>
-                                <option value="low stock">Low Stock</option>
+                            <select id="stockSearchSelect" onchange="applyStockFilter(this.value)" class="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:bg-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-xs cursor-pointer appearance-none">
+                                <option value="" <?= $stock_status === '' ? 'selected' : ''; ?>>-- All Stock Status --</option>
+                                <option value="in_stock" <?= $stock_status === 'in_stock' ? 'selected' : ''; ?>>In Stock</option>
+                                <option value="low_stock" <?= $stock_status === 'low_stock' ? 'selected' : ''; ?>>Low Stock</option>
                             </select>
                             <i class="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
                         </div>
@@ -450,15 +456,14 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                     $cat_id = $row['category_id'] ?? 0;
                                     $color_class = $category_colors[$cat_id % count($category_colors)];
                                     $is_low_stock = ($row['stock'] < 3);
-                                    $stock_status_text = $is_low_stock ? "low stock" : "in stock";
                                 ?>
-                                    <tr class="book-row hover:bg-indigo-50/30 transition" data-stock-status="<?= $stock_status_text; ?>">
+                                    <tr class="book-row hover:bg-indigo-50/30 transition">
                                         <td class="px-4 py-3 text-center font-bold text-slate-900 text-[11px]">
                                             <?= $rowNum++; ?>
                                         </td>
                                         <td class="px-6 py-3">
                                             <?php if (!empty($row['book_image'])): ?>
-                                                <img src="../uploads/<?= htmlspecialchars($row['book_image']); ?>" alt="Cover" class="">
+                                                <img src="../uploads/<?= htmlspecialchars($row['book_image']); ?>" alt="Cover" class="w-10 h-12 object-cover rounded-md shadow-xs">
                                             <?php else: ?>
                                                 <span class="text-slate-400 text-[10px] italic">ပုံမရှိပါ</span>
                                             <?php endif; ?>
@@ -535,7 +540,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                         <div class="flex items-center space-x-1 flex-wrap justify-center">
                             <!-- Previous Button -->
                             <?php if ($page > 1): ?>
-                                <a href="books.php?page=<?= $page - 1; ?>&limit=<?= $limit; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center">
+                                <a href="books.php?page=<?= $page - 1; ?>&limit=<?= $limit; ?>&stock_status=<?= urlencode($stock_status); ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center">
                                     <i class="fa-solid fa-chevron-left mr-1"></i> Prev
                                 </a>
                             <?php else: ?>
@@ -582,7 +587,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
                                         <?= $p; ?>
                                     </span>
                                 <?php else: ?>
-                                    <a href="books.php?page=<?= $p; ?>&limit=<?= $limit; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
+                                    <a href="books.php?page=<?= $p; ?>&limit=<?= $limit; ?>&stock_status=<?= urlencode($stock_status); ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition">
                                         <?= $p; ?>
                                     </a>
                                 <?php endif;
@@ -591,7 +596,7 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
 
                             <!-- Next Button -->
                             <?php if ($page < $total_pages): ?>
-                                <a href="books.php?page=<?= $page + 1; ?>&limit=<?= $limit; ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center">
+                                <a href="books.php?page=<?= $page + 1; ?>&limit=<?= $limit; ?>&stock_status=<?= urlencode($stock_status); ?>" class="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition flex items-center">
                                     Next <i class="fa-solid fa-chevron-right ml-1"></i>
                                 </a>
                             <?php else: ?>
@@ -672,12 +677,35 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
 
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">စာအုပ် ကာဗာပုံ</label>
-                <input type="file" name="book_image" accept="image/*" <?= $editBook ? '' : 'required'; ?> class="bg-white text-xs w-full rounded-xl p-1.5 border border-slate-200 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                <div class="flex items-center gap-2.5 w-full">
+                    <!-- Custom Choose File Button without default input string -->
+                    <label for="book_image" class="inline-flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-indigo-400 cursor-pointer transition shadow-xs shrink-0">
+                        <i class="fa-solid fa-upload text-indigo-600"></i>
+                        <span>Choose File</span>
+                    </label>
+
+                    <!-- Hidden File Input -->
+                    <input type="file" id="book_image" name="book_image" accept="image/*" <?= $editBook ? '' : 'required'; ?> class="hidden" onchange="previewBookImage(this)">
+
+                    <!-- Small Thumbnail Image Preview Container (w-8 h-10) -->
+                    <div id="bookImagePreviewWrapper" class="<?= ($editBook && !empty($editBook['book_image'])) ? 'flex' : 'hidden'; ?> items-center gap-1.5 shrink-0">
+                        <div class="w-8 h-10 rounded border border-slate-200 bg-slate-50 overflow-hidden shrink-0 shadow-xs">
+                            <img id="bookImagePreview"
+                                 src="<?= ($editBook && !empty($editBook['book_image'])) ? '../uploads/' . htmlspecialchars($editBook['book_image']) : ''; ?>"
+                                 alt="Book cover preview"
+                                 class="w-full h-full object-cover">
+                        </div>
+                        <button type="button" onclick="clearBookImagePreview()" class="w-5 h-5 rounded-full bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition shrink-0" aria-label="Remove selected image">
+                            <i class="fa-solid fa-xmark text-[10px]"></i>
+                        </button>
+                    </div>
+
+                </div>
             </div>
 
             <div>
                 <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">အကြောင်းအရာ</label>
-                <textarea name="description" rows="2.5" required placeholder="စာအုပ်အကြောင်း အကျဉ်းချုပ် ရေးသားပါ။" class="bg-white text-xs w-full rounded-xl p-2 border border-slate-200 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-xs"><?= $editBook ? htmlspecialchars($editBook['description']) : ''; ?></textarea>
+                <textarea name="description" rows="2.5" placeholder="စာအုပ်အကြောင်း အကျဉ်းချုပ် ရေးသားပါ။" class="bg-white text-xs w-full rounded-xl p-2 border border-slate-200 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-xs"><?= $editBook ? htmlspecialchars($editBook['description']) : ''; ?></textarea>
             </div>
 
             <div class="pt-2 flex items-center justify-end gap-2.5">
@@ -693,10 +721,9 @@ $pending_payments_count = mysqli_num_rows($pending_payments_query);
 </div>
 
 <script>
-// Filter Books Table function using Search Input and Stock Selection dropdown
+// Instant client-side search by Title, Author or Category
 function filterBooks() {
     const textQuery = document.getElementById('searchInput').value.toLowerCase().trim();
-    const stockQuery = document.getElementById('stockSearchSelect').value.toLowerCase().trim();
     const rows = document.querySelectorAll('.book-row');
     let visibleCount = 0;
 
@@ -704,12 +731,10 @@ function filterBooks() {
         const title = row.querySelector('.book-title')?.textContent.toLowerCase() || '';
         const author = row.querySelector('.book-author')?.textContent.toLowerCase() || '';
         const category = row.querySelector('.book-category')?.textContent.toLowerCase() || '';
-        const stockStatus = row.getAttribute('data-stock-status') || '';
 
         const matchesText = title.includes(textQuery) || author.includes(textQuery) || category.includes(textQuery);
-        const matchesStock = stockQuery === '' || stockStatus === stockQuery;
 
-        if (matchesText && matchesStock) {
+        if (matchesText) {
             row.classList.remove('hidden');
             visibleCount++;
         } else {
@@ -724,6 +749,65 @@ function filterBooks() {
         } else {
             noResultsRow.classList.add('hidden');
         }
+    }
+}
+
+// Reload page with stock status query parameter for database-level stock filter
+function applyStockFilter(stockValue) {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (stockValue) {
+        urlParams.set('stock_status', stockValue);
+    } else {
+        urlParams.delete('stock_status');
+    }
+    urlParams.set('page', '1');
+    window.location.search = urlParams.toString();
+}
+
+// Book cover image preview handler
+function previewBookImage(input) {
+    const previewWrapper = document.getElementById('bookImagePreviewWrapper');
+    const preview = document.getElementById('bookImagePreview');
+    if (!input || !input.files || !input.files[0]) {
+        clearBookImagePreview();
+        return;
+    }
+
+    const file = input.files[0];
+
+    if (!file.type.startsWith('image/')) {
+        input.value = '';
+        clearBookImagePreview();
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        preview.src = e.target.result;
+        previewWrapper.classList.remove('hidden');
+        previewWrapper.classList.add('flex');
+    };
+
+    reader.readAsDataURL(file);
+}
+
+// Clear selected book cover image preview
+function clearBookImagePreview() {
+    const input = document.getElementById('book_image');
+    const previewWrapper = document.getElementById('bookImagePreviewWrapper');
+    const preview = document.getElementById('bookImagePreview');
+    if (input) {
+        input.value = '';
+    }
+
+    if (preview) {
+        preview.removeAttribute('src');
+    }
+
+    if (previewWrapper) {
+        previewWrapper.classList.remove('flex');
+        previewWrapper.classList.add('hidden');
     }
 }
 
@@ -750,14 +834,40 @@ function closeModal() {
         window.location.href = 'books.php';
     }
 }
+
 // Notifications Dropdown Toggle
-        function toggleNotificationDropdown(e) {
-            e.stopPropagation();
-            const notiDropdown = document.getElementById('notiDropdown');
-            const profileDropdown = document.getElementById('profileDropdown');
-            if (notiDropdown) notiDropdown.classList.toggle('hidden');
-            if (profileDropdown) profileDropdown.classList.add('hidden');
-        }
+function toggleNotificationDropdown(e) {
+    e.stopPropagation();
+    const notiDropdown = document.getElementById('notiDropdown');
+    const profileDropdown = document.getElementById('profileDropdown');
+    if (notiDropdown) notiDropdown.classList.toggle('hidden');
+    if (profileDropdown) profileDropdown.classList.add('hidden');
+}
+
+// Toggle Admin Profile Dropdown
+function toggleProfileDropdown(e) {
+    e.stopPropagation();
+    const profileDropdown = document.getElementById('profileDropdown');
+    const notiDropdown = document.getElementById('notiDropdown');
+
+    if (profileDropdown) profileDropdown.classList.toggle('hidden');
+    if (notiDropdown) notiDropdown.classList.add('hidden');
+}
+
+// Close Dropdowns on outside click
+window.addEventListener('click', function(e) {
+    const notiDropdown = document.getElementById('notiDropdown');
+    const profileDropdown = document.getElementById('profileDropdown');
+    const notiBtn = document.getElementById('notiBtn');
+    const profileBtn = document.getElementById('profileBtn');
+
+    if (notiDropdown && !notiDropdown.contains(e.target) && notiBtn && !notiBtn.contains(e.target)) {
+        notiDropdown.classList.add('hidden');
+    }
+    if (profileDropdown && !profileDropdown.contains(e.target) && profileBtn && !profileBtn.contains(e.target)) {
+        profileDropdown.classList.add('hidden');
+    }
+});
 </script>
 
 </body>

@@ -67,7 +67,6 @@ CREATE TABLE `payment_method`(
     `account_number` VARCHAR(255) NOT NULL,
     `account_holder` VARCHAR(255) NOT NULL,
     `is_active` BOOLEAN NOT NULL,
-    
     `description` TEXT NOT NULL
 );
 CREATE TABLE `Order_item`(

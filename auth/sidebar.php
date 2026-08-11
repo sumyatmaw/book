@@ -130,6 +130,10 @@ function sidebar_active($page) {
                 <a href="<?= $base_url; ?>/admin/dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('dashboard'); ?>">
                     <i class="fa-solid fa-chart-pie w-5"></i><span>Dashboard</span>
                 </a>
+                 <a href="<?= $base_url; ?>/admin/view_reports.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('view_reports'); ?>">
+                    <i class="fa-solid fa-chart-bar w-5"></i><span>View Reports</span>
+                </a>
+                
 
                 <a href="<?= $base_url; ?>/admin/categories.php" class="flex items-center space-x-3 px-4 py-3 rounded-xl <?= sidebar_active('categories'); ?>">
                     <i class="fa-solid fa-tags w-5"></i><span>Manage Categories</span>
